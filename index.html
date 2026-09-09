@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <title>Dark Companion RPG</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hint">Drag left side to Move | Tap ⚔ to Attack | Tap ◇ to Dodge</div>
+
+  <!-- Touch Controls Overlay -->
+  <div id="controls">
+    <div id="joystick-zone">
+      <div id="joy-base" class="joy-base">
+        <div id="joy-stick" class="joy-stick"></div>
+      </div>
+    </div>
+    <div id="action-zone">
+      <div class="btn" id="dodge">◇</div>
+      <div class="btn" id="attack">⚔</div>
+    </div>
+  </div>
+
+  <!-- ES Module Entry Point -->
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
