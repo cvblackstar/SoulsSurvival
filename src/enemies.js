@@ -4,17 +4,34 @@ export let enemies = [];
 export let drops = [];
 export let activeBoss = null;
 
+export let difficulty = 'hard';
+
+export function setDifficulty(d) {
+  difficulty = d === 'normal' ? 'normal' : 'hard';
+}
+
+function diffMult() {
+  return difficulty === 'normal' ? 0.5 : 1;
+}
+
+export function resetEnemies() {
+  enemies.length = 0;
+  drops.length = 0;
+  activeBoss = null;
+}
+
 export function spawnEnemy(W, H, score) {
   let isElite = Math.random() < 0.20 && score >= 3;
   let angle = Math.random() * Math.PI * 2;
   let dist = Math.max(W, H) * 0.6;
+  let hp = (25 + score * 4) * (isElite ? 2.5 : 1) * diffMult();
 
   enemies.push({
     x: W / 2 + Math.cos(angle) * dist,
     y: H / 2 + Math.sin(angle) * dist,
     r: isElite ? 22 : 14,
-    hp: (25 + score * 4) * (isElite ? 2.5 : 1),
-    max: (25 + score * 4) * (isElite ? 2.5 : 1),
+    hp: hp,
+    max: hp,
     baseSpeed: (70 + Math.random() * 30) * (isElite ? 0.85 : 1),
     speed: 70,
     dmg: isElite ? 18 : 10,
@@ -32,12 +49,13 @@ export function spawnEnemy(W, H, score) {
 
 export function spawnMiniBoss(W, H, setMsg) {
   setMsg("WARNING: Mini Boss Appeared!", 3.0);
+  let hp = 250 * diffMult();
   let enemy = {
     x: W / 2,
     y: 80,
     r: 28,
-    hp: 250,
-    max: 250,
+    hp: hp,
+    max: hp,
     baseSpeed: 55,
     speed: 55,
     dmg: 22,
@@ -53,12 +71,13 @@ export function spawnMiniBoss(W, H, setMsg) {
 
 export function spawnMajorBoss(W, H, setMsg) {
   setMsg("MAJOR BOSS DESCENT! Defeat it for Legendary Elemental Weapons!", 4.0);
+  let hp = 650 * diffMult();
   activeBoss = {
     x: W / 2,
     y: 70,
     r: 38,
-    hp: 650,
-    max: 650,
+    hp: hp,
+    max: hp,
     baseSpeed: 45,
     speed: 45,
     dmg: 35,

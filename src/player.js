@@ -10,6 +10,19 @@ export const player = {
   elementKey: "none"
 };
 
+export function resetPlayer(W, H) {
+  player.x = W / 2;
+  player.y = H / 2;
+  player.hp = 100;
+  player.max = 100;
+  player.atkCooldown = 0;
+  player.dodge = 0;
+  player.inv = 0;
+  player.weaponKey = "sword";
+  player.tierKey = "common";
+  player.elementKey = "none";
+}
+
 export function applyDamageAndStatus(e, dmg, elem) {
   e.hp -= dmg;
   e.hit = 0.1;

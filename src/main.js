@@ -1,6 +1,6 @@
-import { player, updatePlayer, attack, dodge, drawPlayer, applyDamageAndStatus } from './player.js';
-import { wolf, updateCompanion, drawCompanion } from './companion.js';
-import { enemies, drops, activeBoss, spawnEnemy, spawnMiniBoss, spawnMajorBoss, spawnDrop, updateEnemies, drawEnemiesAndDrops } from './enemies.js';
+import { player, updatePlayer, attack, dodge, drawPlayer, applyDamageAndStatus, resetPlayer } from './player.js';
+import { wolf, updateCompanion, drawCompanion, resetCompanion } from './companion.js';
+import { enemies, drops, activeBoss, spawnEnemy, spawnMiniBoss, spawnMajorBoss, spawnDrop, updateEnemies, drawEnemiesAndDrops, setDifficulty, resetEnemies } from './enemies.js';
 import { WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
 import { initControls } from './controls.js';
 
@@ -14,6 +14,10 @@ let score = 0;
 let killsToBoss = 10;
 let msg = "Prepare for battle! Defeat enemies to loot Tiered & Legendary weapons!";
 let msgT = 4.5;
+
+// Game state machine: 'menu' | 'playing' | 'gameover'
+let gameState = 'menu';
+let selectedDifficulty = 'hard';
 
 function setMsg(text, duration) { msg = text; msgT = duration; }
 
@@ -41,6 +45,69 @@ initControls(
 
 addEventListener('resize', resize);
 resize();
+
+// --- Menu / Game Over / Difficulty wiring ---
+const menuScreen = document.getElementById('menu-screen');
+const gameoverScreen = document.getElementById('gameover-screen');
+const gameoverStats = document.getElementById('gameover-stats');
+const diffNormalBtn = document.getElementById('diff-normal');
+const diffHardBtn = document.getElementById('diff-hard');
+const startBtn = document.getElementById('start-btn');
+const respawnBtn = document.getElementById('respawn-btn');
+const pauseBtn = document.getElementById('pause-btn');
+const pauseScreen = document.getElementById('pause-screen');
+const resumeBtn = document.getElementById('resume-btn');
+const quitBtn = document.getElementById('quit-btn');
+
+function pauseGame() {
+  if (gameState !== 'playing') return;
+  gameState = 'paused';
+  pauseScreen.classList.remove('hidden');
+}
+
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = 'playing';
+  pauseScreen.classList.add('hidden');
+}
+
+pauseBtn.addEventListener('click', pauseGame);
+resumeBtn.addEventListener('click', resumeGame);
+quitBtn.addEventListener('click', () => {
+  pauseScreen.classList.add('hidden');
+  gameState = 'menu';
+  menuScreen.classList.remove('hidden');
+});
+
+function selectDifficulty(d) {
+  selectedDifficulty = d;
+  diffNormalBtn.classList.toggle('selected', d === 'normal');
+  diffHardBtn.classList.toggle('selected', d === 'hard');
+}
+
+diffNormalBtn.addEventListener('click', () => selectDifficulty('normal'));
+diffHardBtn.addEventListener('click', () => selectDifficulty('hard'));
+startBtn.addEventListener('click', () => { menuScreen.classList.add('hidden'); startGame(); });
+respawnBtn.addEventListener('click', () => { gameoverScreen.classList.add('hidden'); startGame(); });
+
+function startGame() {
+  setDifficulty(selectedDifficulty);
+  resetEnemies();
+  resetPlayer(W, H);
+  resetCompanion(player.x, player.y);
+  projectiles = [];
+  spawnTimer = 0;
+  score = 0;
+  killsToBoss = 10;
+  setMsg("Prepare for battle! Defeat enemies to loot Tiered & Legendary weapons!", 4.5);
+  gameState = 'playing';
+}
+
+function gameOver() {
+  gameState = 'gameover';
+  gameoverStats.textContent = `Kills: ${score}`;
+  gameoverScreen.classList.remove('hidden');
+}
 
 function handleEnemyDeath(e) {
   score++;
@@ -80,9 +147,20 @@ function update(dt) {
   updateCompanion(dt, player, enemies, projectiles);
 
   // Pickups
+  const MAGNET_RADIUS = 110;
+  const MAGNET_SPEED = 260;
   for (let i = drops.length - 1; i >= 0; i--) {
     let d = drops[i];
-    if (Math.hypot(player.x - d.x, player.y - d.y) < (player.r + d.r)) {
+    let pdist = Math.hypot(player.x - d.x, player.y - d.y);
+
+    if (d.type === "health" && pdist < MAGNET_RADIUS && pdist > (player.r + d.r)) {
+      let ang = Math.atan2(player.y - d.y, player.x - d.x);
+      d.x += Math.cos(ang) * MAGNET_SPEED * dt;
+      d.y += Math.sin(ang) * MAGNET_SPEED * dt;
+      pdist = Math.hypot(player.x - d.x, player.y - d.y);
+    }
+
+    if (pdist < (player.r + d.r)) {
       if (d.type === "health") {
         player.hp = Math.min(player.max, player.hp + 35);
         setMsg("Healed +35 HP!", 2);
@@ -147,7 +225,7 @@ function update(dt) {
     dt, player,
     (dmg) => {
       player.hp = Math.max(0, player.hp - dmg);
-      if (player.hp <= 0) setMsg("You fell in battle! Refresh to restart.", 99);
+      if (player.hp <= 0 && gameState === 'playing') gameOver();
     },
     handleEnemyDeath
   );
@@ -204,8 +282,8 @@ function draw() {
 function loop(t) {
   let dt = Math.min(0.033, (t - last) / 1000 || 0.016);
   last = t;
-  if (player.hp > 0) update(dt);
-  draw();
+  if (gameState === 'playing' && player.hp > 0) update(dt);
+  if (gameState !== 'menu') draw();
   requestAnimationFrame(loop);
 }
 
