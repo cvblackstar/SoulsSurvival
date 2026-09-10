@@ -1,7 +1,7 @@
 import { player, updatePlayer, attack, dodge, drawPlayer, applyDamageAndStatus, resetPlayer } from './player.js';
 import { wolf, updateCompanion, drawCompanion, resetCompanion } from './companion.js';
-import { enemies, drops, activeBoss, spawnEnemy, spawnMiniBoss, spawnMajorBoss, spawnDrop, updateEnemies, drawEnemiesAndDrops, setDifficulty, resetEnemies } from './enemies.js';
-import { WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
+import { enemies, drops, activeBoss, spawnEnemy, spawnMiniBoss, spawnMajorBoss, spawnDrop, updateEnemies, updateDrops, drawEnemiesAndDrops, setDifficulty, resetEnemies } from './enemies.js';
+import { WEAPONS, LEGENDARY_WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
 import { initControls } from './controls.js';
 
 const c = document.getElementById('game'), ctx = c.getContext('2d');
@@ -168,15 +168,21 @@ function update(dt) {
         player.weaponKey = d.weaponKey;
         player.tierKey = d.tierKey;
         player.elementKey = d.elementKey || "none";
-        let w = WEAPONS[d.weaponKey];
+        let w = WEAPONS[d.weaponKey] || LEGENDARY_WEAPONS[d.weaponKey];
         let t = TIERS[d.tierKey];
         let elem = ELEMENTS[player.elementKey];
         let dmg = getWeaponDamage(d.weaponKey, d.tierKey);
-        setMsg(`Equipped [${elem.name}] [${t.name}] ${w.name} (${dmg} DMG)!`, 2.5);
+        let msg = d.isLegendary ? 
+          `🔥 LEGENDARY! [${elem.name}] [${t.name}] ${w.name} (${dmg} DMG)!` :
+          `Equipped [${elem.name}] [${t.name}] ${w.name} (${dmg} DMG)!`;
+        setMsg(msg, 2.5);
       }
       drops.splice(i, 1);
     }
   }
+
+  // Update drop deprecation timers
+  updateDrops(dt);
 
   // Projectiles
   for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -252,7 +258,7 @@ function draw() {
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
   });
 
-  let curW = WEAPONS[player.weaponKey];
+  let curW = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey];
   let curT = TIERS[player.tierKey];
   let curE = ELEMENTS[player.elementKey] || ELEMENTS.none;
   let curDmg = getWeaponDamage(player.weaponKey, player.tierKey);
