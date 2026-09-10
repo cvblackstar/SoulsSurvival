@@ -1,4 +1,5 @@
 import { WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
+import { joyMove, keys } from './controls.js';
 
 export const player = {
   x: 180, y: 320, r: 18,
@@ -103,6 +104,30 @@ export function updatePlayer(dt, W, H, enemies, projectiles, handleEnemyDeath) {
   if (player.atkCooldown > 0) player.atkCooldown -= dt;
   if (player.inv > 0) player.inv -= dt;
   if (player.dodge > 0) player.dodge -= dt;
+
+  // Movement from joystick or keyboard
+  let moveX = joyMove.x;
+  let moveY = joyMove.y;
+  
+  if (keys['w'] || keys['W']) moveY -= 1;
+  if (keys['s'] || keys['S']) moveY += 1;
+  if (keys['a'] || keys['A']) moveX -= 1;
+  if (keys['d'] || keys['D']) moveX += 1;
+  
+  let speed = player.dodge > 0 ? 150 : 100; // Faster during dodge
+  let distance = Math.hypot(moveX, moveY);
+  
+  if (distance > 0) {
+    moveX /= distance;
+    moveY /= distance;
+  }
+  
+  player.x += moveX * speed * dt;
+  player.y += moveY * speed * dt;
+  
+  // Keep player in bounds
+  player.x = Math.max(player.r, Math.min(W - player.r, player.x));
+  player.y = Math.max(player.r, Math.min(H - player.r, player.y));
 }
 
 export function dodge() {
