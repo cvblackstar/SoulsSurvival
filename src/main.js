@@ -5,7 +5,7 @@ import { WEAPONS, TIERS, getWeaponDamage } from './weapons.js';
 import { initControls } from './controls.js';
 
 const c = document.getElementById('game'), ctx = c.getContext('2d');
-let W, H, dpr, last = 0;
+let W = 360, H = 640, dpr = 1, last = 0;
 
 let projectiles = [];
 let spawnTimer = 0;
@@ -17,20 +17,31 @@ let msgT = 4.5;
 function setMsg(text, duration) { msg = text; msgT = duration; }
 
 function resize() {
-  dpr = Math.min(devicePixelRatio || 1, 2);
-  W = innerWidth; H = innerHeight;
-  c.width = W * dpr; c.height = H * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (player.x === 0) { player.x = W / 2; player.y = H / 2; }
-  if (wolf.x === 0) { wolf.x = W / 2 - 45; wolf.y = H / 2 + 20; }
-}
-addEventListener('resize', resize);
-resize();
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth || 360; 
+  H = window.innerHeight || 640;
+  
+  c.width = W * dpr; 
+  c.height = H * dpr;
+  
+  if (ctx) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
 
+  // Safe check for missing or 0 coordinates so positions never evaluate to NaN
+  if (!player.x || player.x === 0) { player.x = W / 2; player.y = H / 2; }
+  if (!wolf.x || wolf.x === 0) { wolf.x = W / 2 - 45; wolf.y = H / 2 + 20; }
+}
+
+// Initialize touch controls first
 initControls(
   () => attack(enemies, projectiles),
   () => dodge()
 );
+
+// Listen for resize and set initial canvas dimensions
+addEventListener('resize', resize);
+resize();
 
 function handleEnemyDeath(e) {
   score++;
@@ -158,10 +169,12 @@ function draw() {
 }
 
 function loop(t) {
-  let dt = Math.min(.033, (t - last) / 1000 || .016);
+  let dt = Math.min(0.033, (t - last) / 1000 || 0.016);
   last = t;
   if (player.hp > 0) update(dt);
   draw();
   requestAnimationFrame(loop);
 }
+
+// Start game loop
 requestAnimationFrame(loop);
