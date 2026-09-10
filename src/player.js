@@ -9,6 +9,22 @@ export const player = {
   elementKey: "none"
 };
 
+export function applyDamageAndStatus(e, dmg, elem) {
+  e.hp -= dmg;
+  e.hit = 0.1;
+
+  if (!elem || elem.effect === null) return;
+
+  if (elem.effect === "burn") {
+    e.burnTimer = 3.0;
+    e.burnDmg = dmg * 0.15;
+  } else if (elem.effect === "slow") {
+    e.slowTimer = 3.0;
+  } else if (elem.effect === "stun") {
+    e.stunTimer = 1.0;
+  }
+}
+
 export function attack(enemies, projectiles) {
   if (player.atkCooldown > 0) return;
 
@@ -18,7 +34,6 @@ export function attack(enemies, projectiles) {
   
   player.atkCooldown = w.cooldown;
 
-  // Melee attack logic
   if (w.type === "melee") {
     enemies.forEach(e => {
       let dist = Math.hypot(e.x - player.x, e.y - player.y);
@@ -29,7 +44,6 @@ export function attack(enemies, projectiles) {
     return;
   }
 
-  // Find Nearest Enemy for Ranged Targeting
   let nearest = null, minDist = Infinity;
   enemies.forEach(e => {
     let d = Math.hypot(e.x - player.x, e.y - player.y);
@@ -38,7 +52,6 @@ export function attack(enemies, projectiles) {
 
   let baseAngle = nearest ? Math.atan2(nearest.y - player.y, nearest.x - player.x) : 0;
 
-  // Shotgun Spreading Attack
   if (w.type === "shotgun") {
     for (let i = 0; i < w.count; i++) {
       let spreadAngle = baseAngle + (Math.random() - 0.5) * w.spread;
@@ -55,7 +68,6 @@ export function attack(enemies, projectiles) {
     }
   }
 
-  // Piercing Sniper Bolt
   if (w.type === "pierce") {
     projectiles.push({
       x: player.x, y: player.y, r: 7,
@@ -70,7 +82,6 @@ export function attack(enemies, projectiles) {
     });
   }
 
-  // Homing Magic Orb
   if (w.type === "homing") {
     projectiles.push({
       x: player.x, y: player.y, r: 8,
@@ -85,22 +96,6 @@ export function attack(enemies, projectiles) {
       isHoming: true,
       pierce: false
     });
-  }
-}
-
-export function applyDamageAndStatus(e, dmg, elem) {
-  e.hp -= dmg;
-  e.hit = 0.1;
-
-  if (!elem || elem.effect === null) return;
-
-  if (elem.effect === "burn") {
-    e.burnTimer = 3.0;
-    e.burnDmg = dmg * 0.15;
-  } else if (elem.effect === "slow") {
-    e.slowTimer = 3.0;
-  } else if (elem.effect === "stun") {
-    e.stunTimer = 1.0;
   }
 }
 
