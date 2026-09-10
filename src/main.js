@@ -1,39 +1,46 @@
-import { initControls, joyMove } from './controls.js';
-import { player, attack, dodge, drawPlayer, updatePlayer } from './player.js';
+import { player, updatePlayer, attack, dodge, drawPlayer, applyDamageAndStatus } from './player.js';
 import { wolf, updateCompanion, drawCompanion } from './companion.js';
-import { enemies, drops, spawnEnemy, spawnMiniBoss, spawnMajorBoss, updateEnemies, drawEnemiesAndDrops, spawnDrop } from './enemies.js';
+import { enemies, drops, activeBoss, spawnEnemy, spawnMiniBoss, spawnMajorBoss, spawnDrop, updateEnemies, drawEnemiesAndDrops } from './enemies.js';
+import { WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
+import { initControls } from './controls.js';
 
-// ==================== CANVAS & DISPLAY ====================
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-let W = window.innerWidth;
-let H = window.innerHeight;
+const c = document.getElementById('game'), ctx = c.getContext('2d');
+let W = 360, H = 640, dpr = 1, last = 0;
 
-function resizeCanvas() {
-  W = window.innerWidth;
-  H = window.innerHeight;
-  canvas.width = W;
-  canvas.height = H;
-}
-
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-// ==================== GAME STATE ====================
+// 1. Declare state variables FIRST before initControls
+let projectiles = [];
+let spawnTimer = 0;
 let score = 0;
 let killsToBoss = 10;
-let projectiles = [];
-let msgText = "";
-let msgTimer = 0;
-let lastSpawnTime = 0;
-let spawnInterval = 1.5; // Spawn enemy every 1.5 seconds
-let gameRunning = true;
+let msg = "Prepare for battle! Defeat enemies to loot Tiered & Legendary weapons!";
+let msgT = 4.5;
 
-// ==================== HELPER FUNCTIONS ====================
-function setMsg(text, duration = 2.0) {
-  msgText = text;
-  msgTimer = duration;
+function setMsg(text, duration) { msg = text; msgT = duration; }
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth || 360; 
+  H = window.innerHeight || 640;
+  
+  c.width = W * dpr; 
+  c.height = H * dpr;
+  
+  if (ctx) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  if (!player.x || player.x === 0) { player.x = W / 2; player.y = H / 2; }
+  if (!wolf.x || wolf.x === 0) { wolf.x = W / 2 - 45; wolf.y = H / 2 + 20; }
 }
+
+// 2. Initialize controls safely
+initControls(
+  () => attack(enemies, projectiles),
+  () => dodge()
+);
+
+addEventListener('resize', resize);
+resize();
 
 function handleEnemyDeath(e) {
   score++;
@@ -57,72 +64,46 @@ function handleEnemyDeath(e) {
   }
 }
 
-function onPlayerDamage(dmg) {
-  player.hp -= dmg;
-  if (player.hp <= 0) {
-    gameRunning = false;
-    setMsg("GAME OVER! Score: " + score, 5.0);
-  }
-}
+function update(dt) {
+  if (msgT > 0) msgT -= dt;
 
-// ==================== PICKUP LOGIC ====================
-function updatePickups(dt) {
+  if (!activeBoss) {
+    spawnTimer -= dt;
+    let currentSpawnRate = Math.max(0.5, 2.3 - (score * 0.08));
+    if (spawnTimer <= 0) {
+      spawnEnemy(W, H, score);
+      spawnTimer = currentSpawnRate;
+    }
+  }
+
+  updatePlayer(dt, W, H, enemies, projectiles, handleEnemyDeath);
+  updateCompanion(dt, player, enemies, projectiles);
+
+  // Pickups
   for (let i = drops.length - 1; i >= 0; i--) {
     let d = drops[i];
-    let dist = Math.hypot(d.x - player.x, d.y - player.y);
-    
-    if (dist < 50) { // Pickup radius
+    if (Math.hypot(player.x - d.x, player.y - d.y) < (player.r + d.r)) {
       if (d.type === "health") {
-        player.hp = Math.min(player.hp + 30, player.max);
+        player.hp = Math.min(player.max, player.hp + 35);
+        setMsg("Healed +35 HP!", 2);
       } else if (d.type === "weapon") {
         player.weaponKey = d.weaponKey;
         player.tierKey = d.tierKey;
-        player.elementKey = d.elementKey;
-        setMsg(`Equipped: ${d.weaponKey} (${d.tierKey})`, 1.5);
+        player.elementKey = d.elementKey || "none";
+        let w = WEAPONS[d.weaponKey];
+        let t = TIERS[d.tierKey];
+        let elem = ELEMENTS[player.elementKey];
+        let dmg = getWeaponDamage(d.weaponKey, d.tierKey);
+        setMsg(`Equipped [${elem.name}] [${t.name}] ${w.name} (${dmg} DMG)!`, 2.5);
       }
       drops.splice(i, 1);
     }
   }
-}
 
-// ==================== PLAYER MOVEMENT ====================
-function updatePlayerMovement(dt) {
-  const moveSpeed = 280;
-  let dx = 0, dy = 0;
-
-  // Joystick input
-  if (Math.abs(joyMove.x) > 0.1) dx += joyMove.x;
-  if (Math.abs(joyMove.y) > 0.1) dy += joyMove.y;
-
-  // Keyboard input
-  if (typeof keys !== 'undefined') {
-    if (keys['w'] || keys['W'] || keys['ArrowUp']) dy -= 1;
-    if (keys['s'] || keys['S'] || keys['ArrowDown']) dy += 1;
-    if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx -= 1;
-    if (keys['d'] || keys['D'] || keys['ArrowRight']) dx += 1;
-  }
-
-  // Normalize diagonal movement
-  let dist = Math.hypot(dx, dy);
-  if (dist > 0) {
-    dx = (dx / dist) * moveSpeed * dt;
-    dy = (dy / dist) * moveSpeed * dt;
-    
-    player.x += dx;
-    player.y += dy;
-  }
-
-  // Clamp player to screen
-  player.x = Math.max(player.r, Math.min(W - player.r, player.x));
-  player.y = Math.max(player.r, Math.min(H - player.r, player.y));
-}
-
-// ==================== PROJECTILE UPDATES ====================
-function updateProjectiles(dt) {
+  // Projectiles
   for (let i = projectiles.length - 1; i >= 0; i--) {
     let p = projectiles[i];
 
-    // Homing tracking
     if (p.isHoming) {
       let nearest = null, minDist = Infinity;
       enemies.forEach(e => {
@@ -159,115 +140,73 @@ function updateProjectiles(dt) {
       }
     }
 
-    if (remove || p.life <= 0 || p.x < 0 || p.x > W || p.y < 0 || p.y > H) {
-      projectiles.splice(i, 1);
-    }
+    if (remove || p.life <= 0) projectiles.splice(i, 1);
   }
+
+  updateEnemies(
+    dt, player,
+    (dmg) => {
+      player.hp = Math.max(0, player.hp - dmg);
+      if (player.hp <= 0) setMsg("You fell in battle! Refresh to restart.", 99);
+    },
+    handleEnemyDeath
+  );
 }
 
-function applyDamageAndStatus(e, dmg, elem) {
-  e.hp -= dmg;
-  e.hit = 0.1;
-
-  if (!elem || elem.effect === null) return;
-
-  if (elem.effect === "burn") {
-    e.burnTimer = 3.0;
-    e.burnDmg = dmg * 0.15;
-  } else if (elem.effect === "slow") {
-    e.slowTimer = 3.0;
-  } else if (elem.effect === "stun") {
-    e.stunTimer = 1.0;
-  }
+function bar(x, y, w, h, val, max, label, color) {
+  ctx.fillStyle = "#000a"; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = color || (label === "PLAYER" ? "#57b56a" : "#d9a24c");
+  ctx.fillRect(x, y, Math.max(0, w * (val / max)), h);
+  ctx.strokeStyle = "#fff6"; ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = "#fff"; ctx.font = "11px system-ui"; ctx.fillText(label, x + 4, y + h - 3);
 }
 
-// ==================== DRAWING ====================
-function drawUI() {
-  ctx.fillStyle = "#fff";
-  ctx.font = "20px Arial";
-  ctx.fillText("Score: " + score, 20, 40);
-  ctx.fillText("HP: " + Math.max(0, player.hp.toFixed(0)) + " / " + player.max, 20, 70);
-  ctx.fillText("Weapon: " + player.weaponKey.toUpperCase(), 20, 100);
-  ctx.fillText("Tier: " + player.tierKey.toUpperCase(), 20, 130);
-
-  if (msgTimer > 0) {
-    ctx.fillStyle = "rgba(255, 255, 255, " + Math.min(1, msgTimer) + ")";
-    ctx.font = "bold 28px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(msgText, W / 2, H / 2);
-    ctx.textAlign = "left";
-  }
-}
-
-function drawProjectiles() {
-  projectiles.forEach(p => {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = p.color || "#fff";
-    ctx.fill();
-  });
-}
-
-// ==================== MAIN GAME LOOP ====================
-let lastTime = Date.now();
-
-function gameLoop() {
-  const now = Date.now();
-  const dt = Math.min((now - lastTime) / 1000, 0.033); // Cap at 30ms
-  lastTime = now;
-
-  if (!gameRunning) {
-    // Draw game over screen
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 48px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(msgText, W / 2, H / 2);
-    ctx.textAlign = "left";
-    requestAnimationFrame(gameLoop);
-    return;
-  }
-
-  // Update
-  lastSpawnTime += dt;
-  if (lastSpawnTime >= spawnInterval) {
-    spawnEnemy(W, H, score);
-    lastSpawnTime = 0;
-  }
-
-  updatePlayerMovement(dt);
-  updatePlayer(dt, W, H, enemies, projectiles, handleEnemyDeath);
-  updateEnemies(dt, player, onPlayerDamage, handleEnemyDeath);
-  updateCompanion(dt, player, enemies, projectiles);
-  updateProjectiles(dt);
-  updatePickups(dt);
-
-  // Update messages
-  if (msgTimer > 0) msgTimer -= dt;
-
-  // Draw
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, H);
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#18231e"; ctx.fillRect(0, 0, W, H);
 
   drawEnemiesAndDrops(ctx);
-  drawProjectiles();
   drawCompanion(ctx);
   drawPlayer(ctx);
-  drawUI();
 
-  requestAnimationFrame(gameLoop);
+  projectiles.forEach(p => {
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+  });
+
+  let curW = WEAPONS[player.weaponKey];
+  let curT = TIERS[player.tierKey];
+  let curE = ELEMENTS[player.elementKey] || ELEMENTS.none;
+  let curDmg = getWeaponDamage(player.weaponKey, player.tierKey);
+
+  ctx.fillStyle = "#111"; ctx.fillRect(0, 0, W, 82);
+  ctx.fillStyle = "#fff"; ctx.font = "bold 15px system-ui"; ctx.fillText("DARK COMPANION RPG", 14, 22);
+  ctx.font = "12px system-ui"; ctx.fillStyle = "#aaa"; 
+  ctx.fillText(`Kills: ${score}  |  Boss In: ${activeBoss ? "ACTIVE" : killsToBoss}  |  `, 14, 38);
+  ctx.fillStyle = curE.color;
+  ctx.fillText(`[${curE.name}] `, 180, 38);
+  ctx.fillStyle = curT.color;
+  ctx.fillText(`[${curT.name}] ${curW.name} (${curDmg} DMG)`, 235, 38);
+
+  bar(14, 52, 120, 16, player.hp, player.max, "PLAYER");
+  bar(142, 52, 120, 16, wolf.hp, wolf.max, "COMPANION");
+
+  if (activeBoss) {
+    bar(W - 170, 52, 156, 16, activeBoss.hp, activeBoss.max, "MINI BOSS", "#e74c3c");
+  }
+
+  if (msgT > 0) {
+    ctx.fillStyle = "#000c"; ctx.fillRect(10, H - 70, W - 20, 42);
+    ctx.fillStyle = "#fff"; ctx.font = "13px system-ui"; ctx.fillText(msg, 20, H - 44);
+  }
 }
 
-// ==================== INITIALIZE ====================
-initControls(
-  () => attack(enemies, projectiles),
-  () => dodge()
-);
+function loop(t) {
+  let dt = Math.min(0.033, (t - last) / 1000 || 0.016);
+  last = t;
+  if (player.hp > 0) update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
 
-setMsg("Dark Companion RPG - Survive!", 2.0);
-spawnEnemy(W, H, score);
-wolf.x = W / 2;
-wolf.y = H / 2;
-
-requestAnimationFrame(gameLoop);
+requestAnimationFrame(loop);
