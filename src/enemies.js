@@ -5,7 +5,7 @@ export let drops = [];
 export let activeBoss = null;
 
 export function spawnEnemy(W, H, score) {
-  let isElite = Math.random() < 0.20 && score >= 3; // 20% chance for Elite after 3 kills
+  let isElite = Math.random() < 0.20 && score >= 3;
   let angle = Math.random() * Math.PI * 2;
   let dist = Math.max(W, H) * 0.6;
 
@@ -22,8 +22,6 @@ export function spawnEnemy(W, H, score) {
     isMiniBoss: false,
     isBoss: false,
     color: isElite ? "#f1c40f" : "#e74c3c",
-    
-    // Status Effect States
     burnTimer: 0,
     burnDmg: 0,
     slowTimer: 0,
@@ -80,7 +78,6 @@ export function spawnDrop(x, y, isBoss, isMiniBoss, isElite) {
     return;
   }
 
-  // Weapon Drop Logic
   let keys = Object.keys(WEAPONS);
   let weaponKey = keys[Math.floor(Math.random() * keys.length)];
   
@@ -97,7 +94,6 @@ export function spawnDrop(x, y, isBoss, isMiniBoss, isElite) {
     if (rand < 0.25) tierKey = "rare";
   }
 
-  // Elemental Roll (Higher chance on Elites/Bosses)
   let elemKeys = ["none", "fire", "ice", "lightning"];
   let elemChance = isBoss ? 1.0 : (isMiniBoss ? 0.8 : (isElite ? 0.6 : 0.25));
   let elementKey = Math.random() < elemChance ? elemKeys[Math.floor(Math.random() * (elemKeys.length - 1)) + 1] : "none";
@@ -115,13 +111,12 @@ export function updateEnemies(dt, player, onPlayerDamage, onEnemyDeath) {
   for (let i = enemies.length - 1; i >= 0; i--) {
     let e = enemies[i];
 
-    // Status Effect Calculations
     if (e.stunTimer > 0) {
       e.stunTimer -= dt;
       e.speed = 0;
     } else if (e.slowTimer > 0) {
       e.slowTimer -= dt;
-      e.speed = e.baseSpeed * 0.6; // 40% speed reduction
+      e.speed = e.baseSpeed * 0.6;
     } else {
       e.speed = e.baseSpeed;
     }
@@ -134,7 +129,6 @@ export function updateEnemies(dt, player, onPlayerDamage, onEnemyDeath) {
 
     if (e.hit > 0) e.hit -= dt;
 
-    // Movement toward player (if not stunned)
     if (e.speed > 0) {
       let dx = player.x - e.x;
       let dy = player.y - e.y;
@@ -142,13 +136,11 @@ export function updateEnemies(dt, player, onPlayerDamage, onEnemyDeath) {
       e.x += (dx / dist) * e.speed * dt;
       e.y += (dy / dist) * e.speed * dt;
 
-      // Contact Damage
       if (dist < (e.r + player.r) && player.inv <= 0) {
         onPlayerDamage(e.dmg);
       }
     }
 
-    // Death check
     if (e.hp <= 0) {
       if (e.isBoss) activeBoss = null;
       onEnemyDeath(e);
@@ -158,7 +150,6 @@ export function updateEnemies(dt, player, onPlayerDamage, onEnemyDeath) {
 }
 
 export function drawEnemiesAndDrops(ctx) {
-  // Render Drops
   drops.forEach(d => {
     ctx.beginPath();
     ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
@@ -168,7 +159,6 @@ export function drawEnemiesAndDrops(ctx) {
     ctx.stroke();
   });
 
-  // Render Enemies
   enemies.forEach(e => {
     ctx.save();
     ctx.beginPath();
@@ -176,7 +166,6 @@ export function drawEnemiesAndDrops(ctx) {
     ctx.fillStyle = e.hit > 0 ? "#ffffff" : e.color;
     ctx.fill();
 
-    // Element Aura Visuals
     if (e.stunTimer > 0) {
       ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 4; ctx.stroke();
     } else if (e.slowTimer > 0) {
@@ -185,7 +174,6 @@ export function drawEnemiesAndDrops(ctx) {
       ctx.strokeStyle = "#ff4500"; ctx.lineWidth = 3; ctx.stroke();
     }
 
-    // Health Bar for Elites & Bosses
     if (e.isElite || e.isMiniBoss || e.isBoss) {
       let bw = e.r * 2;
       ctx.fillStyle = "#000a";
