@@ -1,4 +1,4 @@
-import { WEAPONS, TIERS, ELEMENTS } from './weapons.js';
+import { WEAPONS, LEGENDARY_WEAPONS, TIERS, ELEMENTS } from './weapons.js';
 
 export let enemies = [];
 export let drops = [];
@@ -92,25 +92,69 @@ export function spawnMajorBoss(W, H, setMsg) {
 }
 
 export function spawnDrop(x, y, isBoss, isMiniBoss, isElite) {
+  // 45% chance for health drop
   if (Math.random() < 0.45) {
-    drops.push({ x, y, r: 8, type: "health" });
+    drops.push({ x, y, r: 8, type: "health", spawnTime: Date.now(), deprecationTimer: 10 });
     return;
   }
 
-  let keys = Object.keys(WEAPONS);
-  let weaponKey = keys[Math.floor(Math.random() * keys.length)];
-  
-  let tierKey = "common";
-  let rand = Math.random();
-  
+  // Determine if it's a legendary weapon
+  let isLegendary = false;
+  let weaponKey, tierKey;
+
   if (isBoss) {
-    tierKey = rand < 0.6 ? "epic" : "legendary";
+    // 10% chance for legendary when killing boss
+    if (Math.random() < 0.10) {
+      isLegendary = true;
+      let legendaryKeys = Object.keys(LEGENDARY_WEAPONS);
+      weaponKey = legendaryKeys[Math.floor(Math.random() * legendaryKeys.length)];
+      tierKey = "legendary";
+    } else {
+      let keys = Object.keys(WEAPONS);
+      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      let rand = Math.random();
+      tierKey = rand < 0.6 ? "epic" : "legendary";
+    }
   } else if (isMiniBoss) {
-    tierKey = rand < 0.5 ? "rare" : "epic";
+    // 5% chance for legendary when killing elite/mini
+    if (Math.random() < 0.05) {
+      isLegendary = true;
+      let legendaryKeys = Object.keys(LEGENDARY_WEAPONS);
+      weaponKey = legendaryKeys[Math.floor(Math.random() * legendaryKeys.length)];
+      tierKey = "legendary";
+    } else {
+      let keys = Object.keys(WEAPONS);
+      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      let rand = Math.random();
+      tierKey = rand < 0.5 ? "rare" : "epic";
+    }
   } else if (isElite) {
-    tierKey = rand < 0.7 ? "rare" : "epic";
+    // 5% chance for legendary when killing elite
+    if (Math.random() < 0.05) {
+      isLegendary = true;
+      let legendaryKeys = Object.keys(LEGENDARY_WEAPONS);
+      weaponKey = legendaryKeys[Math.floor(Math.random() * legendaryKeys.length)];
+      tierKey = "legendary";
+    } else {
+      let keys = Object.keys(WEAPONS);
+      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      let rand = Math.random();
+      tierKey = rand < 0.7 ? "rare" : "epic";
+    }
   } else {
-    if (rand < 0.25) tierKey = "rare";
+    // 3% chance for legendary when killing normal monster
+    if (Math.random() < 0.03) {
+      isLegendary = true;
+      let legendaryKeys = Object.keys(LEGENDARY_WEAPONS);
+      weaponKey = legendaryKeys[Math.floor(Math.random() * legendaryKeys.length)];
+      tierKey = "legendary";
+    } else {
+      let keys = Object.keys(WEAPONS);
+      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      let rand = Math.random();
+      if (rand < 0.25) tierKey = "rare";
+      else tierKey = "common";
+    }
   }
 
   let elemKeys = ["none", "fire", "ice", "lightning"];
@@ -122,7 +166,10 @@ export function spawnDrop(x, y, isBoss, isMiniBoss, isElite) {
     type: "weapon",
     weaponKey,
     tierKey,
-    elementKey
+    elementKey,
+    isLegendary,
+    spawnTime: Date.now(),
+    deprecationTimer: 10  // 10 seconds before disappearing
   });
 }
 
@@ -168,14 +215,62 @@ export function updateEnemies(dt, player, onPlayerDamage, onEnemyDeath) {
   }
 }
 
+export function updateDrops(dt) {
+  for (let i = drops.length - 1; i >= 0; i--) {
+    let d = drops[i];
+    d.deprecationTimer -= dt;
+    if (d.deprecationTimer <= 0) {
+      drops.splice(i, 1);
+    }
+  }
+}
+
 export function drawEnemiesAndDrops(ctx) {
   drops.forEach(d => {
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-    ctx.fillStyle = d.type === "health" ? "#2ecc71" : "#f39c12";
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.stroke();
+    ctx.save();
+    
+    if (d.type === "health") {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fillStyle = "#2ecc71";
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.stroke();
+    } else if (d.type === "weapon") {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fillStyle = "#f39c12";
+      ctx.fill();
+      
+      // Display tier on weapon
+      let tier = TIERS[d.tierKey];
+      if (tier) {
+        ctx.fillStyle = tier.color;
+        ctx.font = "bold 9px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Draw tier abbreviation
+        let tierText = d.tierKey.charAt(0).toUpperCase();
+        if (d.isLegendary) tierText = "L"; // L for Legendary
+        ctx.fillText(tierText, d.x, d.y);
+      }
+      
+      ctx.strokeStyle = tier ? tier.color : "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Fade out animation as deprecation timer approaches 0
+      if (d.deprecationTimer < 2.0) {
+        ctx.globalAlpha = d.deprecationTimer / 2.0;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    ctx.restore();
   });
 
   enemies.forEach(e => {

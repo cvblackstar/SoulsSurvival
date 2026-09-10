@@ -1,4 +1,4 @@
-import { WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
+import { WEAPONS, LEGENDARY_WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
 import { joyMove, keys } from './controls.js';
 
 export const player = {
@@ -7,7 +7,8 @@ export const player = {
   atkCooldown: 0, dodge: 0, inv: 0,
   weaponKey: "sword",
   tierKey: "common",
-  elementKey: "none"
+  elementKey: "none",
+  meleeSwingAngle: 0
 };
 
 export function resetPlayer(W, H) {
@@ -21,6 +22,7 @@ export function resetPlayer(W, H) {
   player.weaponKey = "sword";
   player.tierKey = "common";
   player.elementKey = "none";
+  player.meleeSwingAngle = 0;
 }
 
 export function applyDamageAndStatus(e, dmg, elem) {
@@ -42,13 +44,16 @@ export function applyDamageAndStatus(e, dmg, elem) {
 export function attack(enemies, projectiles) {
   if (player.atkCooldown > 0) return;
 
-  let w = WEAPONS[player.weaponKey] || WEAPONS.sword;
+  let w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS.sword;
   let elem = ELEMENTS[player.elementKey] || ELEMENTS.none;
   let dmg = getWeaponDamage(player.weaponKey, player.tierKey);
   
   player.atkCooldown = w.cooldown;
 
   if (w.type === "melee") {
+    // Melee animation: swing from -0.5 to 0.5 radians
+    player.meleeSwingAngle = -0.5;
+    
     enemies.forEach(e => {
       let dist = Math.hypot(e.x - player.x, e.y - player.y);
       if (dist < (w.range + e.r)) {
@@ -118,6 +123,12 @@ export function updatePlayer(dt, W, H, enemies, projectiles, handleEnemyDeath) {
   if (player.inv > 0) player.inv -= dt;
   if (player.dodge > 0) player.dodge -= dt;
 
+  // Melee swing animation
+  if (player.meleeSwingAngle !== 0) {
+    player.meleeSwingAngle += 3.5 * dt; // Swing speed
+    if (player.meleeSwingAngle > 0.5) player.meleeSwingAngle = 0;
+  }
+
   // Movement from joystick or keyboard
   let moveX = joyMove.x;
   let moveY = joyMove.y;
@@ -127,7 +138,8 @@ export function updatePlayer(dt, W, H, enemies, projectiles, handleEnemyDeath) {
   if (keys['a'] || keys['A']) moveX -= 1;
   if (keys['d'] || keys['D']) moveX += 1;
   
-  let speed = player.dodge > 0 ? 195 : 130; // 30% faster (was 150/100)
+  // Increased speed by 40%: was 195/130, now 273/182
+  let speed = player.dodge > 0 ? 273 : 182;
   let distance = Math.hypot(moveX, moveY);
   
   if (distance > 0) {
@@ -151,8 +163,28 @@ export function dodge() {
 }
 
 export function drawPlayer(ctx) {
+  ctx.save();
   ctx.beginPath();
   ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
   ctx.fillStyle = player.inv > 0 ? "#3498db" : "#2ecc71";
   ctx.fill();
+  ctx.restore();
+
+  // Draw melee weapon swing animation
+  let w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS.sword;
+  if (w.type === "melee" && player.meleeSwingAngle !== 0) {
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.meleeSwingAngle);
+    
+    let ELEMENTS_MAP = { none: "#cccccc", fire: "#ff4500", ice: "#00bfff", lightning: "#ffd700" };
+    ctx.strokeStyle = ELEMENTS_MAP[player.elementKey] || "#cccccc";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(w.range, 0);
+    ctx.stroke();
+    
+    ctx.restore();
+  }
 }

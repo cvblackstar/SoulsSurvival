@@ -19,8 +19,15 @@ export const WEAPONS = {
   homing: { name: "Spirit Orb", type: "homing", baseDmg: 18, range: 450, speed: 220, turnRate: 4.5, cooldown: 0.6 }
 };
 
+// Legendary weapons with special properties
+export const LEGENDARY_WEAPONS = {
+  soulblade: { name: "Soul Blade", type: "melee", baseDmg: 45, range: 50, cooldown: 0.35, legendary: true },
+  inferno: { name: "Inferno Staff", type: "shotgun", baseDmg: 20, count: 6, range: 180, spread: 0.6, speed: 420, cooldown: 0.7, legendary: true },
+  piercer: { name: "Piercer", type: "pierce", baseDmg: 65, range: 700, speed: 750, cooldown: 0.9, legendary: true }
+};
+
 export function getWeaponDamage(weaponKey, tierKey) {
-  let w = WEAPONS[weaponKey] || WEAPONS.sword;
+  let w = WEAPONS[weaponKey] || LEGENDARY_WEAPONS[weaponKey] || WEAPONS.sword;
   let t = TIERS[tierKey] || TIERS.common;
   return Math.round(w.baseDmg * t.mult);
 }
