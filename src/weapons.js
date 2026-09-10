@@ -6,10 +6,10 @@ export const ELEMENTS = {
 };
 
 export const TIERS = {
-  common: { name: "Common", color: "#ffffff", mult: 1.0 },
-  rare: { name: "Rare", color: "#1e90ff", mult: 1.4 },
-  epic: { name: "Epic", color: "#9370db", mult: 1.9 },
-  legendary: { name: "Legendary", color: "#ffa500", mult: 2.6 }
+  common: { name: "Common", color: "#ffffff", mult: 1.0, glow: "#ffffff", borderWidth: 1 },
+  rare: { name: "Rare", color: "#1e90ff", mult: 1.4, glow: "#1e90ff", borderWidth: 2 },
+  epic: { name: "Epic", color: "#9370db", mult: 1.9, glow: "#9370db", borderWidth: 3 },
+  legendary: { name: "Legendary", color: "#ffa500", mult: 2.6, glow: "#ff6400", borderWidth: 4 }
 };
 
 export const WEAPONS = {
