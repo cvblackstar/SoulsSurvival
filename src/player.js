@@ -114,7 +114,7 @@ export function updatePlayer(dt, W, H, enemies, projectiles, handleEnemyDeath) {
   if (keys['a'] || keys['A']) moveX -= 1;
   if (keys['d'] || keys['D']) moveX += 1;
   
-  let speed = player.dodge > 0 ? 150 : 100; // Faster during dodge
+  let speed = player.dodge > 0 ? 195 : 130; // 30% faster (was 150/100)
   let distance = Math.hypot(moveX, moveY);
   
   if (distance > 0) {
