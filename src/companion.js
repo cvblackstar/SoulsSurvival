@@ -1,5 +1,13 @@
 export const wolf = { x: 0, y: 0, r: 15, hp: 100, max: 100, shootTimer: 0 };
 
+export function resetCompanion(px, py) {
+  wolf.x = px - 40;
+  wolf.y = py;
+  wolf.hp = 100;
+  wolf.max = 100;
+  wolf.shootTimer = 0;
+}
+
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function norm(x, y) { let n = Math.hypot(x, y) || 1; return [x / n, y / n]; }
 

@@ -12,6 +12,39 @@
   <canvas id="game"></canvas>
   <div id="hint">Drag left side to Move | Tap ⚔ to Attack | Tap ◇ to Dodge</div>
 
+  <button id="pause-btn">❚❚</button>
+
+  <!-- Pause Screen -->
+  <div id="pause-screen" class="overlay-screen hidden">
+    <div class="menu-box">
+      <h1>PAUSED</h1>
+      <button id="resume-btn" class="menu-btn primary">Resume</button>
+      <button id="quit-btn" class="menu-btn">Quit to Menu</button>
+    </div>
+  </div>
+
+  <!-- Start Menu Screen -->
+  <div id="menu-screen" class="overlay-screen">
+    <div class="menu-box">
+      <h1>DARK COMPANION RPG</h1>
+      <p class="menu-sub">Select Difficulty</p>
+      <div class="diff-buttons">
+        <button id="diff-normal" class="menu-btn diff-btn">Normal</button>
+        <button id="diff-hard" class="menu-btn diff-btn selected">Hard</button>
+      </div>
+      <button id="start-btn" class="menu-btn primary">Start Game</button>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="gameover-screen" class="overlay-screen hidden">
+    <div class="menu-box">
+      <h1 class="gameover-title">YOU DIED</h1>
+      <p id="gameover-stats" class="menu-sub">Kills: 0</p>
+      <button id="respawn-btn" class="menu-btn primary">Respawn</button>
+    </div>
+  </div>
+
   <!-- Touch Controls Overlay -->
   <div id="controls">
     <div id="joystick-zone">
