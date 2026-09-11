@@ -1,56 +1,77 @@
-// The wolf companion hovers/floats beside the player (ignores gravity & platforms)
-// so it can keep up during jumps and gaps, and auto-fires at the nearest enemy.
-export const wolf = { x: 0, y: 0, w: 26, h: 22, hp: 100, max: 100, shootTimer: 0 };
+export const wolf = {
+  x: 20,
+  y: 300,
+  w: 22,
+  h: 18,
+  vx: 0,
+  vy: 0,
+  hp: 80,
+  max: 80,
+  facing: 1,
+  animTimer: 0
+};
 
 export function resetCompanion(px, py) {
-  wolf.x = px - 40;
+  wolf.x = px - 30;
   wolf.y = py;
-  wolf.hp = 100;
-  wolf.max = 100;
-  wolf.shootTimer = 0;
+  wolf.hp = wolf.max;
+  wolf.facing = 1;
+  wolf.animTimer = 0;
 }
-
-function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
 
 export function updateCompanion(dt, player, enemies, projectiles) {
-  // Follow: hover near the player, offset behind their facing direction.
-  const targetX = player.x - player.facing * 45;
-  const targetY = player.y - 10;
-  wolf.x += (targetX - wolf.x) * Math.min(1, dt * 4);
-  wolf.y += (targetY - wolf.y) * Math.min(1, dt * 4);
+  const followDist = 35;
+  const targetX = player.x - player.facing * followDist;
+  const dx = targetX - wolf.x;
 
-  wolf.shootTimer -= dt;
-  if (wolf.shootTimer <= 0 && enemies.length) {
-    let nearest = null, best = Infinity;
-    for (const e of enemies) {
-      const d = dist(wolf.x, wolf.y, e.x + e.w / 2, e.y + e.h / 2);
-      if (d < best && d < 420) { best = d; nearest = e; }
-    }
-    if (nearest) {
-      const ang = Math.atan2((nearest.y + nearest.h / 2) - wolf.y, (nearest.x + nearest.w / 2) - wolf.x);
-      const speed = 300;
-      projectiles.push({
-        x: wolf.x, y: wolf.y,
-        vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
-        r: 4, dmg: 8, elem: "none", life: 1.5, from: "companion"
-      });
-      wolf.shootTimer = 0.9;
-    }
+  if (Math.abs(dx) > 5) {
+    wolf.vx = Math.sign(dx) * 160;
+    wolf.facing = wolf.vx > 0 ? 1 : -1;
+    wolf.x += wolf.vx * dt;
+    wolf.animTimer += dt * 12;
+  } else {
+    wolf.vx = 0;
+    wolf.animTimer = 0;
   }
+
+  // Vertical tracking relative to player position
+  wolf.y += (player.y + (player.h - wolf.h) - wolf.y) * 8 * dt;
 }
 
-export function drawCompanion(ctx, camX) {
-  if (wolf.hp <= 0) return;
+export function drawCompanion(ctx, camX, camY = 0) {
   const sx = wolf.x - camX;
+  const sy = wolf.y - camY;
+
   ctx.save();
-  ctx.fillStyle = "#8899aa";
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.ellipse(sx, wolf.y + wolf.h / 2, wolf.w / 2, wolf.h / 2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#cde";
-  ctx.beginPath();
-  ctx.arc(sx, wolf.y + 4, 4, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.translate(sx + wolf.w / 2, sy + wolf.h / 2);
+
+  if (wolf.facing === -1) {
+    ctx.scale(-1, 1);
+  }
+
+  const isMoving = Math.abs(wolf.vx) > 5;
+  const bounce = isMoving ? Math.abs(Math.sin(wolf.animTimer)) * 3 : 0;
+
+  // Wolf Body Frame
+  ctx.fillStyle = "#d9a24c";
+  ctx.fillRect(-wolf.w / 2, -wolf.h / 2 - bounce, wolf.w - 4, wolf.h - 4);
+
+  // Head & Eyes
+  ctx.fillRect(wolf.w / 2 - 8, -wolf.h / 2 - 4 - bounce, 8, 8);
+  ctx.fillStyle = "#e74c3c";
+  ctx.fillRect(wolf.w / 2 - 4, -wolf.h / 2 - 2 - bounce, 2, 2);
+
+  // Animated Legs
+  const legStride = isMoving ? Math.sin(wolf.animTimer) * 4 : 0;
+  ctx.fillStyle = "#b88132";
+
+  // Rear Legs
+  ctx.fillRect(-wolf.w / 2 + 2, wolf.h / 2 - 4 - bounce, 4, 4 + legStride);
+  ctx.fillRect(-wolf.w / 2 + 7, wolf.h / 2 - 4 - bounce, 4, 4 - legStride);
+
+  // Front Legs
+  ctx.fillRect(wolf.w / 2 - 10, wolf.h / 2 - 4 - bounce, 4, 4 - legStride);
+  ctx.fillRect(wolf.w / 2 - 5, wolf.h / 2 - 4 - bounce, 4, 4 + legStride);
+
   ctx.restore();
 }
