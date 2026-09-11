@@ -11,7 +11,6 @@ let camX = 0, camY = 0;
 
 // Orientation & rendering state
 let isLandscape = true;
-let canvasRotated = false;
 
 let projectiles = [];
 let msg = "Reach the end of the stage and defeat the boss!";
@@ -30,12 +29,11 @@ let transitionSwitched = false;
 function setMsg(text, duration) { msg = text; msgT = duration; }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-// Try to lock landscape where supported; falls back to JavaScript resize handling.
 try {
   if (screen.orientation && screen.orientation.lock) {
     screen.orientation.lock('landscape').catch(() => {});
   }
-} catch (e) { /* not supported - JS fallback handles it */ }
+} catch (e) { /* fallback resize */ }
 
 function isPortraitViewport() {
   return window.matchMedia('(orientation: portrait)').matches;
@@ -48,21 +46,18 @@ function resize() {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
   
-  // Preserve 640 height base so level platforms and GROUND_Y stay visible
+  // Maintain vertical standard 640px height
   H = 640;
   const aspectRatio = viewportWidth / viewportHeight;
   W = Math.floor(H * aspectRatio);
   isLandscape = !inPortrait;
 
-  // Set physical rendering canvas resolution
   c.width = viewportWidth * dpr;
   c.height = viewportHeight * dpr;
   
-  // Stretch canvas display size to fit entire viewport
   c.style.width = viewportWidth + 'px';
   c.style.height = viewportHeight + 'px';
   
-  // Scale render context mapping logical coordinates (W x H) to device screen pixels
   if (ctx) {
     ctx.setTransform(
       (viewportWidth / W) * dpr, 0, 0,
@@ -82,7 +77,7 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', resize);
 resize();
 
-// --- Menu / Pause / Game Over wiring ---
+// UI elements
 const menuScreen = document.getElementById('menu-screen');
 const gameoverScreen = document.getElementById('gameover-screen');
 const gameoverStats = document.getElementById('gameover-stats');
@@ -187,7 +182,7 @@ function update(dt) {
   updatePlayer(dt, enemies, projectiles, () => { if (gameState === 'playing') gameOver(); });
   updateCompanion(dt, player, enemies, projectiles);
 
-  // Pickups (health orbs fly to the player when nearby)
+  // Pickups
   const MAGNET_RADIUS = 110;
   const MAGNET_SPEED = 260;
   const pcx = player.x + player.w / 2, pcy = player.y + player.h / 2;
@@ -279,14 +274,11 @@ function update(dt) {
 
   updateEnemies(dt, player, projectiles, (dmg) => applyDamageAndStatus(dmg), handleEnemyDeath);
 
-  // Camera follows player horizontally and vertically
+  // Camera tracking
   camX = clamp(player.x + player.w / 2 - W / 2, 0, Math.max(0, LEVEL_WIDTH - W));
-  
-  // Track vertical camera offset to center player when ground level exceeds viewport
   const targetCamY = player.y + player.h / 2 - H * 0.65;
   camY = clamp(targetCamY, 0, Math.max(0, LEVEL_HEIGHT - H));
 
-  // Goal check (only "opens" once the boss is dead) -> triggers the stage transition
   if (bossDefeated &&
       player.x + player.w > goal.x && player.x < goal.x + goal.w &&
       player.y + player.h > goal.y && player.y < goal.y + goal.h) {
@@ -309,7 +301,6 @@ function drawBackground() {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // Simple parallax hill silhouettes (adjusted for vertical camera offset)
   ctx.fillStyle = "#16222f";
   const parX = -((camX * 0.3) % 400);
   const hillY = GROUND_Y - camY;
@@ -335,7 +326,6 @@ function drawLevel() {
     ctx.fillStyle = "#2a3f2a";
     ctx.fillRect(sx, sy + 10, p.w, p.h - 10);
 
-    // World-space aligned texture so it visibly streams past as the camera scrolls.
     ctx.save();
     ctx.beginPath();
     ctx.rect(sx, sy, p.w, Math.min(p.h, H - sy));
@@ -360,7 +350,6 @@ function drawLevel() {
     ctx.restore();
   }
 
-  // Goal flag
   const gsx = goal.x - camX;
   const gsy = goal.y - camY;
   if (gsx + goal.w > 0 && gsx < W) {
@@ -375,7 +364,7 @@ function drawLevel() {
 }
 
 function drawTransitionOverlay(progress) {
-  const coverage = Math.sin(Math.min(1, Math.max(0, progress)) * Math.PI); // 0 -> 1 -> 0
+  const coverage = Math.sin(Math.min(1, Math.max(0, progress)) * Math.PI);
   if (coverage <= 0.01) return;
   const cx = W / 2, cy = H / 2;
   const maxR = Math.hypot(W, H) / 2 + 40;
@@ -419,7 +408,6 @@ function draw() {
   drawBackground();
   drawLevel();
 
-  // Draw game entities passing camX and camY offsets
   drawEnemiesAndDrops(ctx, camX, camY);
   drawCompanion(ctx, camX, camY);
   drawPlayer(ctx, camX, camY);
@@ -434,7 +422,6 @@ function draw() {
   const curE = ELEMENTS[player.elementKey] || ELEMENTS.none;
   const curDmg = getWeaponDamage(player.weaponKey, player.tierKey);
 
-  // HUD Bar dimensions adjusted dynamically for screen width W
   const hudH = player.shieldMax > 0 ? 90 : 75;
   ctx.fillStyle = "#111c"; ctx.fillRect(0, 0, W, hudH);
   
@@ -453,7 +440,6 @@ function draw() {
     bar(12, 62, barW * 2 + 6, 12, player.shield, player.shieldMax, "SHIELD", "#4fc3f7");
   }
 
-  // Stage progress aligned dynamically to the right side
   ctx.fillStyle = "#9db4d9"; ctx.font = "11px system-ui"; ctx.textAlign = "right";
   ctx.fillText(`STAGE ${stage}`, W - 12, 16);
   ctx.textAlign = "left";
