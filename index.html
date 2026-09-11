@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <title>Dark Companion RPG</title>
+  <title>Souls Survival</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
   <script>eruda.init();</script>
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="hint">Drag left side to Move | Tap ⚔ to Attack | Tap ◇ to Dodge</div>
+  <div id="hint">◀ ▶ Move | ⤒ Jump | ⚔ Attack | ⚡ Dash</div>
 
   <button id="pause-btn">❚❚</button>
 
@@ -26,7 +26,8 @@
   <!-- Start Menu Screen -->
   <div id="menu-screen" class="overlay-screen">
     <div class="menu-box">
-      <h1>DARK COMPANION RPG</h1>
+      <h1>SOULS SURVIVAL</h1>
+      <p class="menu-sub">Fight through the stage and defeat the boss</p>
       <p class="menu-sub">Select Difficulty</p>
       <div class="diff-buttons">
         <button id="diff-normal" class="menu-btn diff-btn">Normal</button>
@@ -40,21 +41,30 @@
   <div id="gameover-screen" class="overlay-screen hidden">
     <div class="menu-box">
       <h1 class="gameover-title">YOU DIED</h1>
-      <p id="gameover-stats" class="menu-sub">Kills: 0</p>
+      <p id="gameover-stats" class="menu-sub">You reached 0% of the stage</p>
       <button id="respawn-btn" class="menu-btn primary">Respawn</button>
+    </div>
+  </div>
+
+  <!-- Win Screen -->
+  <div id="win-screen" class="overlay-screen hidden">
+    <div class="menu-box">
+      <h1 class="win-title">STAGE CLEAR!</h1>
+      <p class="menu-sub">You defeated the boss and reached the end.</p>
+      <button id="win-restart-btn" class="menu-btn primary">Play Again</button>
     </div>
   </div>
 
   <!-- Touch Controls Overlay -->
   <div id="controls">
-    <div id="joystick-zone">
-      <div id="joy-base" class="joy-base">
-        <div id="joy-stick" class="joy-stick"></div>
-      </div>
+    <div id="dpad">
+      <button id="dpad-left" class="dpad-btn">◀</button>
+      <button id="dpad-right" class="dpad-btn">▶</button>
     </div>
     <div id="action-zone">
-      <div class="btn" id="dodge">◇</div>
-      <div class="btn" id="attack">⚔</div>
+      <button id="dash-btn" class="btn">⚡</button>
+      <button id="attack-btn" class="btn">⚔</button>
+      <button id="jump-btn" class="btn big">⤒</button>
     </div>
   </div>
 

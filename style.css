@@ -41,41 +41,41 @@ canvas {
   z-index: 5;
 }
 
-#joystick-zone {
+#dpad {
   position: absolute;
   left: 0;
-  top: 90px;
+  bottom: 0;
   width: 50vw;
-  height: calc(100vh - 90px);
+  height: 160px;
+  pointer-events: none;
+}
+
+.dpad-btn {
+  position: absolute;
+  bottom: 30px;
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 26px;
+  font-weight: bold;
+  display: grid;
+  place-items: center;
   pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.joy-base {
-  position: absolute;
-  width: 110px;
-  height: 110px;
-  margin-left: -55px;
-  margin-top: -55px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  display: none;
-  pointer-events: none;
+.dpad-btn:active {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0.94);
 }
 
-.joy-stick {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 44px;
-  height: 44px;
-  margin-left: -22px;
-  margin-top: -22px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
-  box-shadow: 0 0 10px rgba(0,0,0,0.5);
-  pointer-events: none;
-}
+#dpad-left { left: 20px; }
+#dpad-right { left: 100px; }
 
 #action-zone {
   position: absolute;
@@ -205,20 +205,33 @@ canvas {
   transform: scale(0.95);
 }
 
-#attack {
-  right: 28px;
-  bottom: 35px;
-  width: 76px;
-  height: 76px;
+#attack-btn {
+  right: 110px;
+  bottom: 34px;
+  width: 68px;
+  height: 68px;
   background: rgba(217, 83, 79, 0.65);
-  font-size: 28px;
+  font-size: 26px;
 }
 
-#dodge {
-  right: 118px;
-  bottom: 25px;
-  width: 60px;
-  height: 60px;
-  background: rgba(51, 122, 183, 0.65);
-  font-size: 22px;
+#jump-btn {
+  right: 14px;
+  bottom: 14px;
+  width: 84px;
+  height: 84px;
+  background: rgba(46, 204, 113, 0.65);
+  font-size: 26px;
+}
+
+#dash-btn {
+  right: 110px;
+  bottom: 112px;
+  width: 56px;
+  height: 56px;
+  background: rgba(241, 196, 15, 0.55);
+  font-size: 20px;
+}
+
+.win-title {
+  color: #2ecc71;
 }
