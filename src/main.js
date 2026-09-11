@@ -9,6 +9,10 @@ const c = document.getElementById('game'), ctx = c.getContext('2d');
 let W = 360, H = 640, dpr = 1, last = 0;
 let camX = 0;
 
+// Orientation & rendering state
+let isLandscape = true;
+let canvasRotated = false;
+
 let projectiles = [];
 let msg = "Reach the end of the stage and defeat the boss!";
 let msgT = 4.5;
@@ -26,12 +30,12 @@ let transitionSwitched = false;
 function setMsg(text, duration) { msg = text; msgT = duration; }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-// Try to lock landscape where supported; falls back to the CSS rotate hack in style.css.
+// Try to lock landscape where supported; falls back to JavaScript resize handling.
 try {
   if (screen.orientation && screen.orientation.lock) {
     screen.orientation.lock('landscape').catch(() => {});
   }
-} catch (e) { /* not supported - CSS fallback handles it */ }
+} catch (e) { /* not supported - JS fallback handles it */ }
 
 function isPortraitViewport() {
   return window.matchMedia('(orientation: portrait)').matches;
@@ -39,17 +43,35 @@ function isPortraitViewport() {
 
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
-  if (isPortraitViewport()) {
-    // CSS rotates the page into landscape; swap our logical W/H to match.
-    W = window.innerHeight || 640;
-    H = window.innerWidth || 360;
+  const inPortrait = isPortraitViewport();
+  
+  if (inPortrait) {
+    // In portrait mode: we want a landscape view, so swap dimensions
+    // Window is portrait (height > width), so:
+    //   innerHeight = ~400px (portrait height)
+    //   innerWidth = ~800px (portrait width)
+    // We want our game to render at 360(W) x 640(H) landscape
+    // But in portrait the available space is width x height = innerWidth x innerHeight
+    // So map: game W (360) -> viewport width, game H (640) -> viewport height
+    W = Math.min(window.innerWidth, 800);  // landscape width available
+    H = Math.min(window.innerHeight, 480); // landscape height available
+    canvasRotated = true;
+    isLandscape = false;
   } else {
-    W = window.innerWidth || 640;
-    H = window.innerHeight || 360;
+    // Landscape mode: use full window
+    W = Math.max(window.innerWidth, 360);
+    H = Math.max(window.innerHeight, 640);
+    canvasRotated = false;
+    isLandscape = true;
   }
+
   c.width = W * dpr;
   c.height = H * dpr;
-  if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  
+  // Set the base transform for pixel ratio
+  if (ctx) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
 }
 
 initControls(
