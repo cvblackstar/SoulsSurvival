@@ -12,27 +12,13 @@ html, body {
   -webkit-user-select: none;
 }
 
-/* Force landscape on phones held in portrait: rotate the page body.
-   position:fixed descendants re-anchor to this rotated box automatically
-   because a transformed ancestor becomes their containing block. */
-@media screen and (orientation: portrait) {
-  body {
-    width: 100vh;
-    height: 100vw;
-    transform: rotate(-90deg);
-    transform-origin: top left;
-    position: absolute;
-    top: 100%;
-    left: 0;
-  }
-}
-
 canvas {
   display: block;
   width: 100%;
   height: 100%;
   background: #151b18;
   touch-action: none;
+  /* Canvas always stays in its natural orientation */
 }
 
 #hint {
