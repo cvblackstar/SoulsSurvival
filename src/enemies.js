@@ -9,6 +9,8 @@ export let difficulty = 'hard';
 export function setDifficulty(d) { difficulty = d === 'normal' ? 'normal' : 'hard'; }
 function diffMult() { return difficulty === 'normal' ? 0.5 : 1; }
 
+let stageMult = 1; // set via resetEnemies(extraMult); grows 5% per stage
+
 const TYPE_DEFS = {
   walker: { w: 26, h: 34, hp: 40, speed: 55, chaseSpeed: 95, aggro: 240, contactDmg: 8 },
   shooter: { w: 24, h: 30, hp: 30, speed: 0, chaseSpeed: 0, aggro: 520, contactDmg: 6, shootRange: 480, shootInterval: 1.6 },
@@ -16,14 +18,15 @@ const TYPE_DEFS = {
   boss: { w: 60, h: 70, hp: 700, speed: 45, chaseSpeed: 90, aggro: 700, contactDmg: 20, shootRange: 460, shootInterval: 1.0 }
 };
 
-export function resetEnemies() {
+export function resetEnemies(extraMult = 1) {
+  stageMult = extraMult;
   enemies.length = 0;
   drops.length = 0;
   bossActive = null;
   for (const spawn of enemySpawns) {
     const def = TYPE_DEFS[spawn.type];
     const isBossType = spawn.type === 'miniboss' || spawn.type === 'boss';
-    const hp = def.hp * diffMult();
+    const hp = def.hp * diffMult() * stageMult;
     enemies.push({
       id: spawn.id,
       type: spawn.type,
@@ -51,6 +54,17 @@ export function applyHitToEnemy(e, dmg, elemKey) {
   if (elem.effect === "burn") e.burn = 2.0;
   if (elem.effect === "slow") e.slow = 2.0;
   if (elem.effect === "stun") e.stun = 0.8;
+}
+
+// Ranged weapons drop noticeably more often than melee weapons.
+function pickWeightedWeaponKey(pool) {
+  const keys = Object.keys(pool);
+  const weighted = [];
+  for (const k of keys) {
+    const weight = pool[k].type === "melee" ? 1 : 3;
+    for (let i = 0; i < weight; i++) weighted.push(k);
+  }
+  return weighted[Math.floor(Math.random() * weighted.length)];
 }
 
 export function updateEnemies(dt, player, projectiles, onPlayerDamage, onDeath) {
@@ -103,12 +117,13 @@ export function updateEnemies(dt, player, projectiles, onPlayerDamage, onDeath) 
         e.shootTimer = def.shootInterval;
         const dir = pcx > ecx ? 1 : -1;
         const speed = 240;
+        const shotDmg = Math.round(10 * stageMult);
         if (e.type === 'boss') {
           for (let s = -1; s <= 1; s++) {
-            projectiles.push({ x: ecx, y: ecy, vx: dir * speed, vy: s * 90, r: 5, dmg: 12, elem: 'none', life: 2, from: 'enemy' });
+            projectiles.push({ x: ecx, y: ecy, vx: dir * speed, vy: s * 90, r: 5, dmg: Math.round(12 * stageMult), elem: 'none', life: 2, from: 'enemy' });
           }
         } else {
-          projectiles.push({ x: ecx, y: ecy, vx: dir * speed, vy: 0, r: 4, dmg: 10, elem: 'none', life: 2, from: 'enemy' });
+          projectiles.push({ x: ecx, y: ecy, vx: dir * speed, vy: 0, r: 4, dmg: shotDmg, elem: 'none', life: 2, from: 'enemy' });
         }
       }
     }
@@ -119,7 +134,7 @@ export function updateEnemies(dt, player, projectiles, onPlayerDamage, onDeath) 
 
     // Contact damage with player (player's invuln window rate-limits repeat hits)
     if (e.x < player.x + player.w && e.x + e.w > player.x && e.y < player.y + player.h && e.y + e.h > player.y) {
-      onPlayerDamage(def.contactDmg);
+      onPlayerDamage(def.contactDmg * stageMult);
     }
   }
 }
@@ -138,45 +153,37 @@ export function spawnDrop(x, y, isBoss, isMiniBoss, isElite) {
   if (isBoss) {
     if (Math.random() < 0.10) {
       isLegendary = true;
-      const lk = Object.keys(LEGENDARY_WEAPONS);
-      weaponKey = lk[Math.floor(Math.random() * lk.length)];
+      weaponKey = pickWeightedWeaponKey(LEGENDARY_WEAPONS);
       tierKey = "legendary";
     } else {
-      const keys = Object.keys(WEAPONS);
-      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      weaponKey = pickWeightedWeaponKey(WEAPONS);
       tierKey = rand < 0.6 ? "epic" : "legendary";
     }
   } else if (isMiniBoss) {
     if (Math.random() < 0.05) {
       isLegendary = true;
-      const lk = Object.keys(LEGENDARY_WEAPONS);
-      weaponKey = lk[Math.floor(Math.random() * lk.length)];
+      weaponKey = pickWeightedWeaponKey(LEGENDARY_WEAPONS);
       tierKey = "legendary";
     } else {
-      const keys = Object.keys(WEAPONS);
-      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      weaponKey = pickWeightedWeaponKey(WEAPONS);
       tierKey = rand < 0.5 ? "rare" : "epic";
     }
   } else if (isElite) {
     if (Math.random() < 0.05) {
       isLegendary = true;
-      const lk = Object.keys(LEGENDARY_WEAPONS);
-      weaponKey = lk[Math.floor(Math.random() * lk.length)];
+      weaponKey = pickWeightedWeaponKey(LEGENDARY_WEAPONS);
       tierKey = "legendary";
     } else {
-      const keys = Object.keys(WEAPONS);
-      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      weaponKey = pickWeightedWeaponKey(WEAPONS);
       tierKey = rand < 0.7 ? "rare" : "epic";
     }
   } else {
     if (Math.random() < 0.03) {
       isLegendary = true;
-      const lk = Object.keys(LEGENDARY_WEAPONS);
-      weaponKey = lk[Math.floor(Math.random() * lk.length)];
+      weaponKey = pickWeightedWeaponKey(LEGENDARY_WEAPONS);
       tierKey = "legendary";
     } else {
-      const keys = Object.keys(WEAPONS);
-      weaponKey = keys[Math.floor(Math.random() * keys.length)];
+      weaponKey = pickWeightedWeaponKey(WEAPONS);
       tierKey = rand < 0.25 ? "rare" : "common";
     }
   }

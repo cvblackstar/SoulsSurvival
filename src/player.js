@@ -8,6 +8,9 @@ const DASH_SPEED = 520;
 const DASH_TIME = 0.16;
 const DASH_COOLDOWN = 0.55;
 const COYOTE_TIME = 0.1;
+const MELEE_SHIELD_MAX = 50;
+const SHIELD_REGEN_RATE = 9; // per second
+const SHIELD_REGEN_DELAY = 3; // seconds of no damage before regen starts
 
 export const player = {
   x: playerStart.x, y: playerStart.y, w: 28, h: 40,
@@ -16,11 +19,12 @@ export const player = {
   onGround: false,
   coyote: 0,
   hp: 100, max: 100,
+  shield: 0, shieldMax: 0, shieldRegenDelay: 0,
   atkCooldown: 0,
   meleeSwingAngle: 0,
   dashTimer: 0, dashCooldown: 0, invuln: 0,
   weaponKey: "sword", tierKey: "common", elementKey: "none",
-  moveLeft: false, moveRight: false
+  moveAxis: 0
 };
 
 export function resetPlayer() {
@@ -32,6 +36,9 @@ export function resetPlayer() {
   player.coyote = 0;
   player.hp = 100;
   player.max = 100;
+  player.shield = 0;
+  player.shieldMax = 0;
+  player.shieldRegenDelay = 0;
   player.atkCooldown = 0;
   player.meleeSwingAngle = 0;
   player.dashTimer = 0;
@@ -40,8 +47,7 @@ export function resetPlayer() {
   player.weaponKey = "sword";
   player.tierKey = "common";
   player.elementKey = "none";
-  player.moveLeft = false;
-  player.moveRight = false;
+  player.moveAxis = 0;
 }
 
 export function jump() {
@@ -114,8 +120,14 @@ export function attack(enemies, projectiles) {
 
 export function applyDamageAndStatus(dmg) {
   if (player.invuln > 0) return;
-  player.hp = Math.max(0, player.hp - dmg);
   player.invuln = 0.6;
+  player.shieldRegenDelay = SHIELD_REGEN_DELAY;
+  if (player.shield > 0) {
+    const absorbed = Math.min(player.shield, dmg);
+    player.shield -= absorbed;
+    dmg -= absorbed;
+  }
+  if (dmg > 0) player.hp = Math.max(0, player.hp - dmg);
 }
 
 export function updatePlayer(dt, enemies, projectiles, onDeath) {
@@ -123,17 +135,27 @@ export function updatePlayer(dt, enemies, projectiles, onDeath) {
   if (player.invuln > 0) player.invuln -= dt;
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
 
+  // Melee weapons grant a regenerating shield; switching away drops it.
+  const w = currentWeapon();
+  const newShieldMax = w.type === "melee" ? MELEE_SHIELD_MAX : 0;
+  if (newShieldMax !== player.shieldMax) {
+    player.shieldMax = newShieldMax;
+    player.shield = newShieldMax;
+  }
+  if (player.shieldMax > 0 && player.shield < player.shieldMax) {
+    if (player.shieldRegenDelay > 0) player.shieldRegenDelay -= dt;
+    else player.shield = Math.min(player.shieldMax, player.shield + SHIELD_REGEN_RATE * dt);
+  }
+
   if (player.meleeSwingAngle !== 0) {
     const step = 4.5 * dt;
     if (player.meleeSwingAngle > 0) player.meleeSwingAngle = Math.max(0, player.meleeSwingAngle - step);
     else player.meleeSwingAngle = Math.min(0, player.meleeSwingAngle + step);
   }
 
-  // Horizontal movement
-  let moveDir = 0;
-  if (player.moveLeft) moveDir -= 1;
-  if (player.moveRight) moveDir += 1;
-  if (moveDir !== 0) player.facing = moveDir;
+  // Horizontal movement (analog joystick axis, -1..1)
+  const moveDir = Math.max(-1, Math.min(1, player.moveAxis));
+  if (Math.abs(moveDir) > 0.15) player.facing = moveDir > 0 ? 1 : -1;
 
   if (player.dashTimer > 0) {
     player.dashTimer -= dt;
@@ -170,6 +192,17 @@ export function drawPlayer(ctx, camX) {
   ctx.fillRect(sx, player.y, player.w, player.h);
   ctx.fillStyle = "#5a4632";
   ctx.fillRect(sx, player.y, player.w, 10);
+
+  if (player.shieldMax > 0 && player.shield > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.35 * (player.shield / player.shieldMax);
+    ctx.strokeStyle = "#4fc3f7";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(sx + player.w / 2, player.y + player.h / 2, player.w * 0.85, player.h * 0.75, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Melee swing arc
   const w = currentWeapon();

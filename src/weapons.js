@@ -13,7 +13,7 @@ export const TIERS = {
 };
 
 export const WEAPONS = {
-  sword: { name: "Broadsword", type: "melee", baseDmg: 25, range: 45, cooldown: 0.4 },
+  sword: { name: "Broadsword", type: "melee", baseDmg: 65, range: 45, cooldown: 0.4 },
   shotgun: { name: "Blunderbuss", type: "shotgun", baseDmg: 12, count: 4, range: 140, spread: 0.45, speed: 380, cooldown: 0.8 },
   pierce: { name: "Arbalest", type: "pierce", baseDmg: 40, range: 600, speed: 650, cooldown: 1.1 },
   homing: { name: "Spirit Orb", type: "homing", baseDmg: 18, range: 450, speed: 220, turnRate: 4.5, cooldown: 0.6 }
@@ -21,7 +21,7 @@ export const WEAPONS = {
 
 // Legendary weapons with special properties
 export const LEGENDARY_WEAPONS = {
-  soulblade: { name: "Soul Blade", type: "melee", baseDmg: 45, range: 50, cooldown: 0.35, legendary: true },
+  soulblade: { name: "Soul Blade", type: "melee", baseDmg: 105, range: 50, cooldown: 0.35, legendary: true },
   inferno: { name: "Inferno Staff", type: "shotgun", baseDmg: 20, count: 6, range: 180, spread: 0.6, speed: 420, cooldown: 0.7, legendary: true },
   piercer: { name: "Piercer", type: "pierce", baseDmg: 65, range: 700, speed: 750, cooldown: 0.9, legendary: true }
 };

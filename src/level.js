@@ -24,6 +24,9 @@ export const platforms = [
   { x: 3020, y: GROUND_Y - 90, w: 160, h: 20 },
   // Boss arena
   { x: 3220, y: GROUND_Y, w: 380, h: 160 },
+  // Invisible walls so the player can't walk off the left/right edges of the world
+  { x: -40, y: -2000, w: 40, h: 4000, invisible: true },
+  { x: LEVEL_WIDTH, y: -2000, w: 40, h: 4000, invisible: true },
 ];
 
 // Fixed enemy placements (id used so we don't respawn a killed enemy on scroll-back).

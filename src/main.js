@@ -13,17 +13,40 @@ let projectiles = [];
 let msg = "Reach the end of the stage and defeat the boss!";
 let msgT = 4.5;
 
-let gameState = 'menu'; // menu | playing | paused | gameover | win
+let gameState = 'menu'; // menu | playing | paused | gameover | transition
 let selectedDifficulty = 'hard';
 let bossDefeated = false;
+
+let stage = 1;
+let pendingStage = 1;
+const TRANSITION_DURATION = 1.8;
+let transitionTimer = 0;
+let transitionSwitched = false;
 
 function setMsg(text, duration) { msg = text; msgT = duration; }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+// Try to lock landscape where supported; falls back to the CSS rotate hack in style.css.
+try {
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {});
+  }
+} catch (e) { /* not supported - CSS fallback handles it */ }
+
+function isPortraitViewport() {
+  return window.matchMedia('(orientation: portrait)').matches;
+}
+
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth || 360;
-  H = window.innerHeight || 640;
+  if (isPortraitViewport()) {
+    // CSS rotates the page into landscape; swap our logical W/H to match.
+    W = window.innerHeight || 640;
+    H = window.innerWidth || 360;
+  } else {
+    W = window.innerWidth || 640;
+    H = window.innerHeight || 360;
+  }
   c.width = W * dpr;
   c.height = H * dpr;
   if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -33,23 +56,21 @@ initControls(
   () => attack(enemies, projectiles),
   () => jump(),
   () => dash(),
-  (v) => { player.moveLeft = v; },
-  (v) => { player.moveRight = v; }
+  (axis) => { player.moveAxis = axis; }
 );
 
 addEventListener('resize', resize);
+addEventListener('orientationchange', resize);
 resize();
 
-// --- Menu / Pause / Game Over / Win wiring ---
+// --- Menu / Pause / Game Over wiring ---
 const menuScreen = document.getElementById('menu-screen');
 const gameoverScreen = document.getElementById('gameover-screen');
 const gameoverStats = document.getElementById('gameover-stats');
-const winScreen = document.getElementById('win-screen');
 const diffNormalBtn = document.getElementById('diff-normal');
 const diffHardBtn = document.getElementById('diff-hard');
 const startBtn = document.getElementById('start-btn');
 const respawnBtn = document.getElementById('respawn-btn');
-const winRestartBtn = document.getElementById('win-restart-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const pauseScreen = document.getElementById('pause-screen');
 const resumeBtn = document.getElementById('resume-btn');
@@ -85,11 +106,11 @@ diffNormalBtn.addEventListener('click', () => selectDifficulty('normal'));
 diffHardBtn.addEventListener('click', () => selectDifficulty('hard'));
 startBtn.addEventListener('click', () => { menuScreen.classList.add('hidden'); startGame(); });
 respawnBtn.addEventListener('click', () => { gameoverScreen.classList.add('hidden'); startGame(); });
-winRestartBtn.addEventListener('click', () => { winScreen.classList.add('hidden'); startGame(); });
 
 function startGame() {
+  stage = 1;
   setDifficulty(selectedDifficulty);
-  resetEnemies();
+  resetEnemies(1);
   resetPlayer();
   resetCompanion(player.x, player.y);
   projectiles = [];
@@ -102,13 +123,28 @@ function startGame() {
 function gameOver() {
   gameState = 'gameover';
   const pct = Math.floor((player.x / LEVEL_WIDTH) * 100);
-  gameoverStats.textContent = `You reached ${pct}% of the stage`;
+  gameoverStats.textContent = `Stage ${stage} - you reached ${pct}% of the way through`;
   gameoverScreen.classList.remove('hidden');
 }
 
-function winGame() {
-  gameState = 'win';
-  winScreen.classList.remove('hidden');
+function startTransition() {
+  gameState = 'transition';
+  pendingStage = stage + 1;
+  transitionTimer = TRANSITION_DURATION;
+  transitionSwitched = false;
+}
+
+function advanceStage() {
+  stage = pendingStage;
+  const stageMult = Math.pow(1.05, stage - 1);
+  resetEnemies(stageMult);
+  resetPlayer();
+  resetCompanion(player.x, player.y);
+  projectiles = [];
+  camX = 0;
+  bossDefeated = false;
+  const pct = Math.round((stageMult - 1) * 100);
+  setMsg(`Stage ${stage} - enemies are ${pct}% stronger!`, 4);
 }
 
 function handleEnemyDeath(e) {
@@ -225,11 +261,11 @@ function update(dt) {
   // Camera follows player, clamped to level bounds
   camX = clamp(player.x + player.w / 2 - W / 2, 0, Math.max(0, LEVEL_WIDTH - W));
 
-  // Goal check (only "opens" once the boss is dead)
+  // Goal check (only "opens" once the boss is dead) -> triggers the stage transition
   if (bossDefeated &&
       player.x + player.w > goal.x && player.x < goal.x + goal.w &&
       player.y + player.h > goal.y && player.y < goal.y + goal.h) {
-    winGame();
+    startTransition();
   }
 }
 
@@ -263,12 +299,38 @@ function drawBackground() {
 
 function drawLevel() {
   for (const p of platforms) {
+    if (p.invisible) continue;
     const sx = p.x - camX;
     if (sx + p.w < 0 || sx > W) continue;
+
     ctx.fillStyle = "#3d5a3d";
     ctx.fillRect(sx, p.y, p.w, 10);
     ctx.fillStyle = "#2a3f2a";
     ctx.fillRect(sx, p.y + 10, p.w, p.h - 10);
+
+    // World-space aligned texture so it visibly streams past as the camera scrolls.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx, p.y, p.w, Math.min(p.h, H - p.y));
+    ctx.clip();
+
+    ctx.fillStyle = "#5c8a5c";
+    const tuftSpacing = 14;
+    for (let wx = Math.floor(p.x / tuftSpacing) * tuftSpacing; wx < p.x + p.w; wx += tuftSpacing) {
+      ctx.fillRect(wx - camX, p.y, 3, 5);
+    }
+
+    ctx.strokeStyle = "rgba(0,0,0,0.28)";
+    ctx.lineWidth = 2;
+    const tickSpacing = 22;
+    for (let wx = Math.floor((p.x - 20) / tickSpacing) * tickSpacing; wx < p.x + p.w + 20; wx += tickSpacing) {
+      const sxT = wx - camX;
+      ctx.beginPath();
+      ctx.moveTo(sxT, p.y + 16);
+      ctx.lineTo(sxT + 12, p.y + p.h);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // Goal flag
@@ -284,6 +346,46 @@ function drawLevel() {
   }
 }
 
+function drawTransitionOverlay(progress) {
+  const coverage = Math.sin(Math.min(1, Math.max(0, progress)) * Math.PI); // 0 -> 1 -> 0
+  if (coverage <= 0.01) return;
+  const cx = W / 2, cy = H / 2;
+  const maxR = Math.hypot(W, H) / 2 + 40;
+
+  ctx.save();
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * coverage);
+  grad.addColorStop(0, "#1a0a3a");
+  grad.addColorStop(0.65, "#0a0620");
+  grad.addColorStop(1, "#000000");
+  ctx.globalAlpha = Math.min(1, coverage * 1.3);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR * coverage, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#8ecbff";
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 3; i++) {
+    const r = maxR * coverage * (0.3 + 0.25 * i);
+    ctx.globalAlpha = coverage * 0.5;
+    const spin = progress * 6 + i * 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, spin, spin + Math.PI * 1.4);
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = coverage;
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 22px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(`ENTERING STAGE ${pendingStage}`, cx, cy);
+  ctx.font = "13px system-ui";
+  ctx.fillStyle = "#cddfff";
+  ctx.fillText("Difficulty rising...", cx, cy + 26);
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
 function draw() {
   ctx.clearRect(0, 0, W, H);
   drawBackground();
@@ -293,7 +395,6 @@ function draw() {
   drawCompanion(ctx, camX);
   drawPlayer(ctx, camX);
 
-  ctx.fillStyle = "#ffd54a";
   projectiles.forEach(p => {
     ctx.fillStyle = p.from === 'enemy' ? "#e74c3c" : "#ffd54a";
     ctx.beginPath(); ctx.arc(p.x - camX, p.y, p.r, 0, Math.PI * 2); ctx.fill();
@@ -304,7 +405,8 @@ function draw() {
   const curE = ELEMENTS[player.elementKey] || ELEMENTS.none;
   const curDmg = getWeaponDamage(player.weaponKey, player.tierKey);
 
-  ctx.fillStyle = "#111"; ctx.fillRect(0, 0, W, 82);
+  const hudH = player.shieldMax > 0 ? 100 : 82;
+  ctx.fillStyle = "#111"; ctx.fillRect(0, 0, W, hudH);
   ctx.fillStyle = "#fff"; ctx.font = "bold 15px system-ui"; ctx.fillText("SOULS SURVIVAL", 14, 22);
   ctx.font = "12px system-ui";
   ctx.fillStyle = curE.color;
@@ -314,8 +416,14 @@ function draw() {
 
   bar(14, 52, 120, 16, player.hp, player.max, "PLAYER");
   bar(142, 52, 120, 16, wolf.hp, wolf.max, "COMPANION");
+  if (player.shieldMax > 0) {
+    bar(14, 72, 248, 14, player.shield, player.shieldMax, "SHIELD", "#4fc3f7");
+  }
 
-  // Stage progress bar
+  // Stage + progress
+  ctx.fillStyle = "#9db4d9"; ctx.font = "11px system-ui"; ctx.textAlign = "right";
+  ctx.fillText(`STAGE ${stage}`, W - 14, 16);
+  ctx.textAlign = "left";
   const progress = clamp(player.x / LEVEL_WIDTH, 0, 1);
   ctx.fillStyle = "#000a"; ctx.fillRect(W - 130, 20, 116, 10);
   ctx.fillStyle = "#3498db"; ctx.fillRect(W - 130, 20, 116 * progress, 10);
@@ -330,12 +438,28 @@ function draw() {
     ctx.fillStyle = "#000c"; ctx.fillRect(10, H - 70, W - 20, 42);
     ctx.fillStyle = "#fff"; ctx.font = "13px system-ui"; ctx.fillText(msg, 20, H - 44);
   }
+
+  if (gameState === 'transition') {
+    drawTransitionOverlay(1 - transitionTimer / TRANSITION_DURATION);
+  }
 }
 
 function loop(t) {
   const dt = Math.min(0.033, (t - last) / 1000 || 0.016);
   last = t;
+
   if (gameState === 'playing' && player.hp > 0) update(dt);
+
+  if (gameState === 'transition') {
+    transitionTimer -= dt;
+    const progress = 1 - transitionTimer / TRANSITION_DURATION;
+    if (!transitionSwitched && progress >= 0.5) {
+      advanceStage();
+      transitionSwitched = true;
+    }
+    if (transitionTimer <= 0) gameState = 'playing';
+  }
+
   if (gameState !== 'menu') draw();
   requestAnimationFrame(loop);
 }
