@@ -45,30 +45,60 @@ function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   const inPortrait = isPortraitViewport();
   
+  // Game logical size is 360x640 (portrait aspect ratio)
+  // On landscape phones, we need to scale it to fit the actual viewport
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  
   if (inPortrait) {
-    // In portrait mode: we want a landscape view, so swap dimensions
-    // Window is portrait (height > width), so:
-    //   innerHeight = ~400px (portrait height)
-    //   innerWidth = ~800px (portrait width)
-    // We want our game to render at 360(W) x 640(H) landscape
-    // But in portrait the available space is width x height = innerWidth x innerHeight
-    // So map: game W (360) -> viewport width, game H (640) -> viewport height
-    W = Math.min(window.innerWidth, 800);  // landscape width available
-    H = Math.min(window.innerHeight, 480); // landscape height available
-    canvasRotated = true;
+    // Portrait viewport: fit portrait game
+    const targetHeight = Math.min(viewportHeight, 800);
+    const targetWidth = Math.min(viewportWidth, 600);
+    
+    // Maintain 360:640 aspect ratio
+    const aspectRatio = 360 / 640;
+    let finalW = targetWidth;
+    let finalH = targetWidth / aspectRatio;
+    
+    if (finalH > targetHeight) {
+      finalH = targetHeight;
+      finalW = targetHeight * aspectRatio;
+    }
+    
+    W = Math.max(320, Math.floor(finalW));
+    H = Math.max(568, Math.floor(finalH));
+    canvasRotated = false;
     isLandscape = false;
   } else {
-    // Landscape mode: use full window
-    W = Math.max(window.innerWidth, 360);
-    H = Math.max(window.innerHeight, 640);
+    // Landscape viewport: scale the 360x640 game to landscape fit
+    const targetWidth = Math.min(viewportWidth, 1200);
+    const targetHeight = Math.min(viewportHeight, 800);
+    
+    // Maintain 360:640 aspect ratio
+    const aspectRatio = 360 / 640;
+    let finalW = targetWidth;
+    let finalH = targetWidth / aspectRatio;
+    
+    if (finalH > targetHeight) {
+      finalH = targetHeight;
+      finalW = targetHeight * aspectRatio;
+    }
+    
+    W = Math.max(320, Math.floor(finalW));
+    H = Math.max(568, Math.floor(finalH));
     canvasRotated = false;
     isLandscape = true;
   }
 
+  // Set canvas internal resolution
   c.width = W * dpr;
   c.height = H * dpr;
   
-  // Set the base transform for pixel ratio
+  // Set canvas CSS display size
+  c.style.width = W + 'px';
+  c.style.height = H + 'px';
+  
+  // Scale rendering context
   if (ctx) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
