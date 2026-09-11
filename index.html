@@ -10,7 +10,7 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="hint">◀ ▶ Move | ⤒ Jump | ⚔ Attack | ⚡ Dash</div>
+  <div id="hint">Drag left side to Move | ⤒ Jump | ⚔ Attack | ⚡ Dash</div>
 
   <button id="pause-btn">❚❚</button>
 
@@ -46,20 +46,12 @@
     </div>
   </div>
 
-  <!-- Win Screen -->
-  <div id="win-screen" class="overlay-screen hidden">
-    <div class="menu-box">
-      <h1 class="win-title">STAGE CLEAR!</h1>
-      <p class="menu-sub">You defeated the boss and reached the end.</p>
-      <button id="win-restart-btn" class="menu-btn primary">Play Again</button>
-    </div>
-  </div>
-
   <!-- Touch Controls Overlay -->
   <div id="controls">
-    <div id="dpad">
-      <button id="dpad-left" class="dpad-btn">◀</button>
-      <button id="dpad-right" class="dpad-btn">▶</button>
+    <div id="joystick-zone">
+      <div id="joy-base" class="joy-base">
+        <div id="joy-stick" class="joy-stick"></div>
+      </div>
     </div>
     <div id="action-zone">
       <button id="dash-btn" class="btn">⚡</button>

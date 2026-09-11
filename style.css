@@ -1,6 +1,7 @@
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
   background: #0d1010;
@@ -11,10 +12,25 @@ html, body {
   -webkit-user-select: none;
 }
 
+/* Force landscape on phones held in portrait: rotate the whole page.
+   position:fixed descendants re-anchor to this rotated box automatically
+   because a transformed ancestor becomes their containing block. */
+@media screen and (orientation: portrait) {
+  html {
+    width: 100vh;
+    height: 100vw;
+    transform: rotate(-90deg);
+    transform-origin: left top;
+    position: absolute;
+    top: 100%;
+    left: 0;
+  }
+}
+
 canvas {
   display: block;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   background: #151b18;
   touch-action: none;
 }
@@ -41,47 +57,47 @@ canvas {
   z-index: 5;
 }
 
-#dpad {
+#joystick-zone {
   position: absolute;
   left: 0;
-  bottom: 0;
-  width: 50vw;
-  height: 160px;
+  top: 90px;
+  width: 50%;
+  height: calc(100% - 90px);
+  pointer-events: auto;
+}
+
+.joy-base {
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  margin-left: -55px;
+  margin-top: -55px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  display: none;
   pointer-events: none;
 }
 
-.dpad-btn {
+.joy-stick {
   position: absolute;
-  bottom: 30px;
-  width: 68px;
-  height: 68px;
-  border-radius: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  font-size: 26px;
-  font-weight: bold;
-  display: grid;
-  place-items: center;
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  pointer-events: none;
 }
-
-.dpad-btn:active {
-  background: rgba(255, 255, 255, 0.25);
-  transform: scale(0.94);
-}
-
-#dpad-left { left: 20px; }
-#dpad-right { left: 100px; }
 
 #action-zone {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 50vw;
+  width: 50%;
   height: 220px;
   pointer-events: none;
 }
@@ -150,7 +166,7 @@ canvas {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  max-width: 80vw;
+  max-width: 80%;
 }
 
 .menu-box h1 {
@@ -230,8 +246,4 @@ canvas {
   height: 56px;
   background: rgba(241, 196, 15, 0.55);
   font-size: 20px;
-}
-
-.win-title {
-  color: #2ecc71;
 }
