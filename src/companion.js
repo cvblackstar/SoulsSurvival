@@ -1,4 +1,6 @@
-export const wolf = { x: 0, y: 0, r: 15, hp: 100, max: 100, shootTimer: 0 };
+// The wolf companion hovers/floats beside the player (ignores gravity & platforms)
+// so it can keep up during jumps and gaps, and auto-fires at the nearest enemy.
+export const wolf = { x: 0, y: 0, w: 26, h: 22, hp: 100, max: 100, shootTimer: 0 };
 
 export function resetCompanion(px, py) {
   wolf.x = px - 40;
@@ -8,54 +10,47 @@ export function resetCompanion(px, py) {
   wolf.shootTimer = 0;
 }
 
-function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
-function norm(x, y) { let n = Math.hypot(x, y) || 1; return [x / n, y / n]; }
+function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
 
 export function updateCompanion(dt, player, enemies, projectiles) {
-  wolf.shootTimer = Math.max(0, wolf.shootTimer - dt);
+  // Follow: hover near the player, offset behind their facing direction.
+  const targetX = player.x - player.facing * 45;
+  const targetY = player.y - 10;
+  wolf.x += (targetX - wolf.x) * Math.min(1, dt * 4);
+  wolf.y += (targetY - wolf.y) * Math.min(1, dt * 4);
 
-  let nearestEnemy = null;
-  let minDist = Infinity;
-  enemies.forEach(e => {
-    let d = dist(wolf, e);
-    if (d < minDist) { minDist = d; nearestEnemy = e; }
-  });
-
-  if (nearestEnemy && minDist < 340) {
-    if (wolf.shootTimer <= 0) {
-      wolf.shootTimer = 0.80;
-      let [px, py] = norm(nearestEnemy.x - wolf.x, nearestEnemy.y - wolf.y);
+  wolf.shootTimer -= dt;
+  if (wolf.shootTimer <= 0 && enemies.length) {
+    let nearest = null, best = Infinity;
+    for (const e of enemies) {
+      const d = dist(wolf.x, wolf.y, e.x + e.w / 2, e.y + e.h / 2);
+      if (d < best && d < 420) { best = d; nearest = e; }
+    }
+    if (nearest) {
+      const ang = Math.atan2((nearest.y + nearest.h / 2) - wolf.y, (nearest.x + nearest.w / 2) - wolf.x);
+      const speed = 300;
       projectiles.push({
         x: wolf.x, y: wolf.y,
-        vx: px * 420, vy: py * 420,
-        r: 6, life: 1.5, isPlayer: false,
-        dmg: 30, color: "#70e0ff"
+        vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+        r: 4, dmg: 8, elem: "none", life: 1.5, from: "companion"
       });
-    }
-
-    if (minDist < 110) {
-      let [kx, ky] = norm(wolf.x - nearestEnemy.x, wolf.y - nearestEnemy.y);
-      wolf.x += kx * 125 * dt;
-      wolf.y += ky * 125 * dt;
-    }
-  } else {
-    let dPlayer = dist(wolf, player);
-    if (dPlayer > 60) {
-      let [x, y] = norm(player.x - wolf.x, player.y - wolf.y);
-      wolf.x += x * 155 * dt;
-      wolf.y += y * 155 * dt;
+      wolf.shootTimer = 0.9;
     }
   }
 }
 
-export function drawCompanion(ctx) {
-  ctx.fillStyle = "#b58b5a";
+export function drawCompanion(ctx, camX) {
+  if (wolf.hp <= 0) return;
+  const sx = wolf.x - camX;
+  ctx.save();
+  ctx.fillStyle = "#8899aa";
+  ctx.globalAlpha = 0.85;
   ctx.beginPath();
-  ctx.arc(wolf.x, wolf.y, wolf.r, 0, Math.PI * 2);
+  ctx.ellipse(sx, wolf.y + wolf.h / 2, wolf.w / 2, wolf.h / 2, 0, 0, Math.PI * 2);
   ctx.fill();
-
-  ctx.fillStyle = "#70e0ff";
+  ctx.fillStyle = "#cde";
   ctx.beginPath();
-  ctx.arc(wolf.x, wolf.y, 4, 0, Math.PI * 2);
+  ctx.arc(sx, wolf.y + 4, 4, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 }
