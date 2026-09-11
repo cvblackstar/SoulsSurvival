@@ -7,7 +7,7 @@ import { initControls } from './controls.js';
 
 const c = document.getElementById('game'), ctx = c.getContext('2d');
 let W = 360, H = 640, dpr = 1, last = 0;
-let camX = 0;
+let camX = 0, camY = 0;
 
 // Orientation & rendering state
 let isLandscape = true;
@@ -48,32 +48,11 @@ function resize() {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
   
-  if (inPortrait) {
-    // Portrait Viewport Layout
-    const targetHeight = Math.min(viewportHeight, 800);
-    const targetWidth = Math.min(viewportWidth, 600);
-    const aspectRatio = 360 / 640;
-    
-    let finalW = targetWidth;
-    let finalH = targetWidth / aspectRatio;
-    
-    if (finalH > targetHeight) {
-      finalH = targetHeight;
-      finalW = targetHeight * aspectRatio;
-    }
-    
-    W = Math.max(320, Math.floor(finalW));
-    H = Math.max(568, Math.floor(finalH));
-    isLandscape = false;
-  } else {
-    // Landscape Viewport Layout: Adapt to dynamic aspect ratio
-    const baselineHeight = 450; // Logical vertical height for 2D view
-    const aspectRatio = viewportWidth / viewportHeight;
-    
-    H = baselineHeight;
-    W = Math.floor(baselineHeight * aspectRatio);
-    isLandscape = true;
-  }
+  // Preserve 640 height base so level platforms and GROUND_Y stay visible
+  H = 640;
+  const aspectRatio = viewportWidth / viewportHeight;
+  W = Math.floor(H * aspectRatio);
+  isLandscape = !inPortrait;
 
   // Set physical rendering canvas resolution
   c.width = viewportWidth * dpr;
@@ -155,6 +134,7 @@ function startGame() {
   resetCompanion(player.x, player.y);
   projectiles = [];
   camX = 0;
+  camY = 0;
   bossDefeated = false;
   setMsg("Reach the end of the stage and defeat the boss!", 4);
   gameState = 'playing';
@@ -182,6 +162,7 @@ function advanceStage() {
   resetCompanion(player.x, player.y);
   projectiles = [];
   camX = 0;
+  camY = 0;
   bossDefeated = false;
   const pct = Math.round((stageMult - 1) * 100);
   setMsg(`Stage ${stage} - enemies are ${pct}% stronger!`, 4);
@@ -298,8 +279,12 @@ function update(dt) {
 
   updateEnemies(dt, player, projectiles, (dmg) => applyDamageAndStatus(dmg), handleEnemyDeath);
 
-  // Camera follows player, clamped to level bounds
+  // Camera follows player horizontally and vertically
   camX = clamp(player.x + player.w / 2 - W / 2, 0, Math.max(0, LEVEL_WIDTH - W));
+  
+  // Track vertical camera offset to center player when ground level exceeds viewport
+  const targetCamY = player.y + player.h / 2 - H * 0.65;
+  camY = clamp(targetCamY, 0, Math.max(0, LEVEL_HEIGHT - H));
 
   // Goal check (only "opens" once the boss is dead) -> triggers the stage transition
   if (bossDefeated &&
@@ -324,13 +309,14 @@ function drawBackground() {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // Simple parallax hill silhouettes
+  // Simple parallax hill silhouettes (adjusted for vertical camera offset)
   ctx.fillStyle = "#16222f";
   const parX = -((camX * 0.3) % 400);
+  const hillY = GROUND_Y - camY;
   for (let x = parX - 400; x < W + 400; x += 400) {
     ctx.beginPath();
-    ctx.moveTo(x, GROUND_Y);
-    ctx.quadraticCurveTo(x + 200, GROUND_Y - 160, x + 400, GROUND_Y);
+    ctx.moveTo(x, hillY);
+    ctx.quadraticCurveTo(x + 200, hillY - 160, x + 400, hillY);
     ctx.lineTo(x + 400, H);
     ctx.lineTo(x, H);
     ctx.fill();
@@ -341,23 +327,24 @@ function drawLevel() {
   for (const p of platforms) {
     if (p.invisible) continue;
     const sx = p.x - camX;
-    if (sx + p.w < 0 || sx > W) continue;
+    const sy = p.y - camY;
+    if (sx + p.w < 0 || sx > W || sy + p.h < 0 || sy > H) continue;
 
     ctx.fillStyle = "#3d5a3d";
-    ctx.fillRect(sx, p.y, p.w, 10);
+    ctx.fillRect(sx, sy, p.w, 10);
     ctx.fillStyle = "#2a3f2a";
-    ctx.fillRect(sx, p.y + 10, p.w, p.h - 10);
+    ctx.fillRect(sx, sy + 10, p.w, p.h - 10);
 
     // World-space aligned texture so it visibly streams past as the camera scrolls.
     ctx.save();
     ctx.beginPath();
-    ctx.rect(sx, p.y, p.w, Math.min(p.h, H - p.y));
+    ctx.rect(sx, sy, p.w, Math.min(p.h, H - sy));
     ctx.clip();
 
     ctx.fillStyle = "#5c8a5c";
     const tuftSpacing = 14;
     for (let wx = Math.floor(p.x / tuftSpacing) * tuftSpacing; wx < p.x + p.w; wx += tuftSpacing) {
-      ctx.fillRect(wx - camX, p.y, 3, 5);
+      ctx.fillRect(wx - camX, sy, 3, 5);
     }
 
     ctx.strokeStyle = "rgba(0,0,0,0.28)";
@@ -366,8 +353,8 @@ function drawLevel() {
     for (let wx = Math.floor((p.x - 20) / tickSpacing) * tickSpacing; wx < p.x + p.w + 20; wx += tickSpacing) {
       const sxT = wx - camX;
       ctx.beginPath();
-      ctx.moveTo(sxT, p.y + 16);
-      ctx.lineTo(sxT + 12, p.y + p.h);
+      ctx.moveTo(sxT, sy + 16);
+      ctx.lineTo(sxT + 12, sy + p.h);
       ctx.stroke();
     }
     ctx.restore();
@@ -375,13 +362,14 @@ function drawLevel() {
 
   // Goal flag
   const gsx = goal.x - camX;
+  const gsy = goal.y - camY;
   if (gsx + goal.w > 0 && gsx < W) {
     ctx.fillStyle = bossDefeated ? "#f1c40f" : "#555";
-    ctx.fillRect(gsx, goal.y, 6, goal.h);
+    ctx.fillRect(gsx, gsy, 6, goal.h);
     ctx.beginPath();
-    ctx.moveTo(gsx + 6, goal.y);
-    ctx.lineTo(gsx + 34, goal.y + 14);
-    ctx.lineTo(gsx + 6, goal.y + 28);
+    ctx.moveTo(gsx + 6, gsy);
+    ctx.lineTo(gsx + 34, gsy + 14);
+    ctx.lineTo(gsx + 6, gsy + 28);
     ctx.fill();
   }
 }
@@ -431,13 +419,14 @@ function draw() {
   drawBackground();
   drawLevel();
 
-  drawEnemiesAndDrops(ctx, camX);
-  drawCompanion(ctx, camX);
-  drawPlayer(ctx, camX);
+  // Draw game entities passing camX and camY offsets
+  drawEnemiesAndDrops(ctx, camX, camY);
+  drawCompanion(ctx, camX, camY);
+  drawPlayer(ctx, camX, camY);
 
   projectiles.forEach(p => {
     ctx.fillStyle = p.from === 'enemy' ? "#e74c3c" : "#ffd54a";
-    ctx.beginPath(); ctx.arc(p.x - camX, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x - camX, p.y - camY, p.r, 0, Math.PI * 2); ctx.fill();
   });
 
   const curW = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey];
