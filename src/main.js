@@ -45,18 +45,15 @@ function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   const inPortrait = isPortraitViewport();
   
-  // Game logical size is 360x640 (portrait aspect ratio)
-  // On landscape phones, we need to scale it to fit the actual viewport
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
   
   if (inPortrait) {
-    // Portrait viewport: fit portrait game
+    // Portrait Viewport Layout
     const targetHeight = Math.min(viewportHeight, 800);
     const targetWidth = Math.min(viewportWidth, 600);
-    
-    // Maintain 360:640 aspect ratio
     const aspectRatio = 360 / 640;
+    
     let finalW = targetWidth;
     let finalH = targetWidth / aspectRatio;
     
@@ -67,40 +64,31 @@ function resize() {
     
     W = Math.max(320, Math.floor(finalW));
     H = Math.max(568, Math.floor(finalH));
-    canvasRotated = false;
     isLandscape = false;
   } else {
-    // Landscape viewport: scale the 360x640 game to landscape fit
-    const targetWidth = Math.min(viewportWidth, 1200);
-    const targetHeight = Math.min(viewportHeight, 800);
+    // Landscape Viewport Layout: Adapt to dynamic aspect ratio
+    const baselineHeight = 450; // Logical vertical height for 2D view
+    const aspectRatio = viewportWidth / viewportHeight;
     
-    // Maintain 360:640 aspect ratio
-    const aspectRatio = 360 / 640;
-    let finalW = targetWidth;
-    let finalH = targetWidth / aspectRatio;
-    
-    if (finalH > targetHeight) {
-      finalH = targetHeight;
-      finalW = targetHeight * aspectRatio;
-    }
-    
-    W = Math.max(320, Math.floor(finalW));
-    H = Math.max(568, Math.floor(finalH));
-    canvasRotated = false;
+    H = baselineHeight;
+    W = Math.floor(baselineHeight * aspectRatio);
     isLandscape = true;
   }
 
-  // Set canvas internal resolution
-  c.width = W * dpr;
-  c.height = H * dpr;
+  // Set physical rendering canvas resolution
+  c.width = viewportWidth * dpr;
+  c.height = viewportHeight * dpr;
   
-  // Set canvas CSS display size
-  c.style.width = W + 'px';
-  c.style.height = H + 'px';
+  // Stretch canvas display size to fit entire viewport
+  c.style.width = viewportWidth + 'px';
+  c.style.height = viewportHeight + 'px';
   
-  // Scale rendering context
+  // Scale render context mapping logical coordinates (W x H) to device screen pixels
   if (ctx) {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(
+      (viewportWidth / W) * dpr, 0, 0,
+      (viewportHeight / H) * dpr, 0, 0
+    );
   }
 }
 
@@ -457,38 +445,44 @@ function draw() {
   const curE = ELEMENTS[player.elementKey] || ELEMENTS.none;
   const curDmg = getWeaponDamage(player.weaponKey, player.tierKey);
 
-  const hudH = player.shieldMax > 0 ? 100 : 82;
-  ctx.fillStyle = "#111"; ctx.fillRect(0, 0, W, hudH);
-  ctx.fillStyle = "#fff"; ctx.font = "bold 15px system-ui"; ctx.fillText("SOULS SURVIVAL", 14, 22);
-  ctx.font = "12px system-ui";
+  // HUD Bar dimensions adjusted dynamically for screen width W
+  const hudH = player.shieldMax > 0 ? 90 : 75;
+  ctx.fillStyle = "#111c"; ctx.fillRect(0, 0, W, hudH);
+  
+  ctx.fillStyle = "#fff"; ctx.font = "bold 14px system-ui"; ctx.fillText("SOULS SURVIVAL", 12, 20);
+  ctx.font = "11px system-ui";
   ctx.fillStyle = curE.color;
-  ctx.fillText(`[${curE.name}] `, 14, 38);
+  ctx.fillText(`[${curE.name}] `, 12, 35);
   ctx.fillStyle = curT.color;
-  ctx.fillText(`[${curT.name}] ${curW.name} (${curDmg} DMG)`, 70, 38);
+  ctx.fillText(`[${curT.name}] ${curW.name} (${curDmg} DMG)`, 68, 35);
 
-  bar(14, 52, 120, 16, player.hp, player.max, "PLAYER");
-  bar(142, 52, 120, 16, wolf.hp, wolf.max, "COMPANION");
+  const barW = Math.min(120, Math.floor(W * 0.22));
+  bar(12, 44, barW, 14, player.hp, player.max, "PLAYER");
+  bar(18 + barW, 44, barW, 14, wolf.hp, wolf.max, "COMPANION");
+  
   if (player.shieldMax > 0) {
-    bar(14, 72, 248, 14, player.shield, player.shieldMax, "SHIELD", "#4fc3f7");
+    bar(12, 62, barW * 2 + 6, 12, player.shield, player.shieldMax, "SHIELD", "#4fc3f7");
   }
 
-  // Stage + progress
+  // Stage progress aligned dynamically to the right side
   ctx.fillStyle = "#9db4d9"; ctx.font = "11px system-ui"; ctx.textAlign = "right";
-  ctx.fillText(`STAGE ${stage}`, W - 14, 16);
+  ctx.fillText(`STAGE ${stage}`, W - 12, 16);
   ctx.textAlign = "left";
+  
   const progress = clamp(player.x / LEVEL_WIDTH, 0, 1);
-  ctx.fillStyle = "#000a"; ctx.fillRect(W - 130, 20, 116, 10);
-  ctx.fillStyle = "#3498db"; ctx.fillRect(W - 130, 20, 116 * progress, 10);
-  ctx.strokeStyle = "#fff6"; ctx.strokeRect(W - 130, 20, 116, 10);
+  const progressBarW = Math.min(130, Math.floor(W * 0.25));
+  ctx.fillStyle = "#000a"; ctx.fillRect(W - progressBarW - 12, 22, progressBarW, 8);
+  ctx.fillStyle = "#3498db"; ctx.fillRect(W - progressBarW - 12, 22, progressBarW * progress, 8);
+  ctx.strokeStyle = "#fff6"; ctx.strokeRect(W - progressBarW - 12, 22, progressBarW, 8);
 
   if (bossActive) {
-    bar(W - 170, 52, 156, 16, bossActive.hp, bossActive.max,
+    bar(W - progressBarW - 12, 36, progressBarW, 14, bossActive.hp, bossActive.max,
       bossActive.type === 'boss' ? "BOSS" : "MINI BOSS", "#e74c3c");
   }
 
   if (msgT > 0) {
-    ctx.fillStyle = "#000c"; ctx.fillRect(10, H - 70, W - 20, 42);
-    ctx.fillStyle = "#fff"; ctx.font = "13px system-ui"; ctx.fillText(msg, 20, H - 44);
+    ctx.fillStyle = "#000c"; ctx.fillRect(10, H - 52, W - 20, 36);
+    ctx.fillStyle = "#fff"; ctx.font = "12px system-ui"; ctx.fillText(msg, 18, H - 30);
   }
 
   if (gameState === 'transition') {
