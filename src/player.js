@@ -1,15 +1,15 @@
-import { LEVEL_WIDTH, GROUND_Y, platforms } from './level.js';
+import { LEVEL_WIDTH, GRAVITY, resolveCollisions } from './level.js';
 import { WEAPONS, LEGENDARY_WEAPONS, TIERS, getWeaponDamage } from './weapons.js';
 
 export const player = {
-  x: 50,
+  x: 60,
   y: 300,
   w: 24,
   h: 36,
   vx: 0,
   vy: 0,
   speed: 180,
-  jumpForce: 420,
+  jumpForce: 450,
   grounded: false,
   hp: 100,
   max: 100,
@@ -23,12 +23,13 @@ export const player = {
   dashTimer: 0,
   dashCooldown: 0,
   attackCooldown: 0,
+  attackAnimTimer: 0, // Timer for melee slash animation
   facing: 1, // 1 = Right, -1 = Left
   animTimer: 0
 };
 
 export function resetPlayer() {
-  player.x = 50;
+  player.x = 60;
   player.y = 300;
   player.vx = 0;
   player.vy = 0;
@@ -39,25 +40,24 @@ export function resetPlayer() {
   player.dashTimer = 0;
   player.dashCooldown = 0;
   player.attackCooldown = 0;
+  player.attackAnimTimer = 0;
   player.moveAxis = 0;
   player.facing = 1;
   player.animTimer = 0;
 }
 
 export function updatePlayer(dt, enemies, projectiles, onGameOver) {
-  // Update Cooldowns
+  // Update Cooldowns & Animation Timers
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
   if (player.attackCooldown > 0) player.attackCooldown -= dt;
+  if (player.attackAnimTimer > 0) player.attackAnimTimer -= dt;
 
-  // Handle Dashing vs Normal Movement
+  // Horizontal Movement
   if (player.isDashing) {
     player.dashTimer -= dt;
     player.vx = player.facing * player.speed * 2.5;
-    if (player.dashTimer <= 0) {
-      player.isDashing = false;
-    }
+    if (player.dashTimer <= 0) player.isDashing = false;
   } else {
-    // Normal X Movement & Facing direction
     if (player.moveAxis !== 0) {
       player.facing = player.moveAxis > 0 ? 1 : -1;
       player.vx = player.moveAxis * player.speed;
@@ -68,39 +68,21 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
     }
   }
 
-  // Gravity integration
-  player.vy += 1200 * dt;
-  
-  // Positional update
-  player.x += player.vx * dt;
-  player.y += player.vy * dt;
+  // Gravity
+  player.vy += GRAVITY * dt;
 
-  // Level horizontal bounds check
+  // Resolve platform collision (returns false when floating over a pit)
+  player.grounded = resolveCollisions(player, dt);
+
+  // Keep player inside level left/right boundaries
   player.x = Math.max(0, Math.min(LEVEL_WIDTH - player.w, player.x));
 
-  // Precise Platform Collision check (Fixes floating/freezing mid-air)
-  player.grounded = false;
-  const prevY = player.y - player.vy * dt;
-
-  for (const p of platforms) {
-    if (player.x + player.w > p.x && player.x < p.x + p.w) {
-      // Check that the player was above the platform top in the previous frame and falling down
-      if (player.vy >= 0 && prevY + player.h <= p.y + 6 && player.y + player.h >= p.y) {
-        player.y = p.y - player.h;
-        player.vy = 0;
-        player.grounded = true;
-      }
-    }
+  // Pit Death Condition (Falling below screen height 640)
+  if (player.y > 640) {
+    player.hp = 0;
   }
 
-  // Floor collision check
-  if (player.y + player.h >= GROUND_Y) {
-    player.y = GROUND_Y - player.h;
-    player.vy = 0;
-    player.grounded = true;
-  }
-
-  // Check Game Over condition
+  // Trigger Game Over callback
   if (player.hp <= 0 && onGameOver) {
     onGameOver();
   }
@@ -109,14 +91,17 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
 export function attack(enemies, projectiles) {
   if (player.attackCooldown > 0) return;
 
-  const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey];
+  const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS['sword'];
   if (!w) return;
 
-  const dmg = getWeaponDamage(player.weaponKey, player.tierKey);
+  // Calculate damage with fallback starter value (20 base dmg)
+  let dmg = getWeaponDamage ? getWeaponDamage(player.weaponKey, player.tierKey) : (w.damage || 20);
+  if (!dmg || dmg <= 0) dmg = w.damage || 20;
+
   player.attackCooldown = w.cooldown || 0.35;
+  player.attackAnimTimer = 0.18; // Slash animation stays visible for 0.18 seconds
 
   if (w.type !== 'melee') {
-    // Ranged projectile creation
     projectiles.push({
       x: player.x + (player.facing === 1 ? player.w + 4 : -10),
       y: player.y + player.h / 2 - 4,
@@ -133,12 +118,11 @@ export function attack(enemies, projectiles) {
       hitList: []
     });
   } else {
-    // Melee attack hitbox check
-    const range = w.range || 40;
+    const range = w.range || 45;
     const atkX = player.facing === 1 ? player.x + player.w : player.x - range;
-    const atkY = player.y;
+    const atkY = player.y - 10;
     const atkW = range;
-    const atkH = player.h;
+    const atkH = player.h + 20;
 
     for (const e of enemies) {
       if (atkX < e.x + e.w && atkX + atkW > e.x &&
@@ -169,7 +153,7 @@ export function dash() {
 }
 
 export function applyDamageAndStatus(dmg) {
-  if (player.isDashing) return; // Invulnerable during dash
+  if (player.isDashing) return;
 
   if (player.shield > 0) {
     player.shield -= dmg;
@@ -190,39 +174,48 @@ export function drawPlayer(ctx, camX, camY = 0) {
   ctx.save();
   ctx.translate(sx + player.w / 2, sy + player.h / 2);
 
-  // Dash visual ghost effect
   if (player.isDashing) {
     ctx.fillStyle = "rgba(52, 152, 219, 0.4)";
     ctx.fillRect(-player.w / 2 - player.facing * 14, -player.h / 2, player.w, player.h);
   }
 
-  // Horizontal flip for movement direction
   if (player.facing === -1) {
     ctx.scale(-1, 1);
   }
 
-  // Main Body
+  // Body
   ctx.fillStyle = "#3498db";
   ctx.fillRect(-player.w / 2, -player.h / 2 + 8, player.w, player.h - 14);
 
-  // Helmet Visor
+  // Head & Visor
   ctx.fillStyle = "#ecf0f1";
   ctx.fillRect(-player.w / 2 + 2, -player.h / 2, player.w - 4, 10);
   ctx.fillStyle = "#2c3e50";
   ctx.fillRect(1, -player.h / 2 + 3, 7, 3);
 
-  // Animated Legs (Stretching stride based on movement speed)
+  // Legs Animation
   const isMoving = Math.abs(player.vx) > 5;
   const stride = isMoving ? Math.sin(player.animTimer) * 7 : 0;
 
   ctx.fillStyle = "#2c3e50";
-  // Left & Right Leg Strides
   ctx.fillRect(-player.w / 2 + 3, player.h / 2 - 8, 5, 8 + (isMoving ? stride : 0));
   ctx.fillRect(player.w / 2 - 8, player.h / 2 - 8, 5, 8 - (isMoving ? stride : 0));
 
-  // Animated Arm / Weapon Stance
-  ctx.fillStyle = "#2980b9";
-  ctx.fillRect(2, -2 - (isMoving ? stride * 0.5 : 0), 6, 10);
+  // Melee Weapon Swing Slash Arc
+  if (player.attackAnimTimer > 0) {
+    ctx.strokeStyle = "#f39c12";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(10, 0, 32, -Math.PI / 3, Math.PI / 3, false);
+    ctx.stroke();
+
+    // Inner glow
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(10, 0, 30, -Math.PI / 3, Math.PI / 3, false);
+    ctx.stroke();
+  }
 
   ctx.restore();
 }
