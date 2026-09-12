@@ -2,14 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <!-- 1. Added touch-action=none prevent default mobile zooming/scrolling glitches -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Souls Survival</title>
   <link rel="stylesheet" href="style.css">
+  
+  <!-- Eruda DevTools for Mobile Debugging -->
   <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
   <script>eruda.init();</script>
 </head>
 <body>
   <canvas id="game"></canvas>
+
+  <!-- 2. Added Player HUD Container (Health & Shield Bars) -->
+  <div id="hud" class="hud-container hidden">
+    <div class="bar-container">
+      <div id="hp-bar" class="bar hp-bar" style="width: 100%;"></div>
+    </div>
+    <div class="bar-container">
+      <div id="shield-bar" class="bar shield-bar" style="width: 0%;"></div>
+    </div>
+    <div id="weapon-display" class="weapon-display">Sword (Common)</div>
+  </div>
+
   <div id="hint">Drag left side to Move | ⤒ Jump | ⚔ Attack | ⚡ Dash</div>
 
   <button id="pause-btn">❚❚</button>
@@ -42,7 +57,8 @@
     <div class="menu-box">
       <h1 class="gameover-title">YOU DIED</h1>
       <p id="gameover-stats" class="menu-sub">You reached 0% of the stage</p>
-      <button id="respawn-btn" class="menu-btn primary">Respawn</button>
+      <!-- 3. Added type="button" to prevent form submission side effects -->
+      <button id="respawn-btn" type="button" class="menu-btn primary">Respawn</button>
     </div>
   </div>
 
@@ -54,9 +70,9 @@
       </div>
     </div>
     <div id="action-zone">
-      <button id="dash-btn" class="btn">⚡</button>
-      <button id="attack-btn" class="btn">⚔</button>
-      <button id="jump-btn" class="btn big">⤒</button>
+      <button id="dash-btn" type="button" class="btn">⚡</button>
+      <button id="attack-btn" type="button" class="btn">⚔</button>
+      <button id="jump-btn" type="button" class="btn big">⤒</button>
     </div>
   </div>
 
