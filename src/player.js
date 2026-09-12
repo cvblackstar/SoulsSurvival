@@ -1,5 +1,5 @@
 import { WEAPONS, LEGENDARY_WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
-import { GROUND_Y, platforms, LEVEL_WIDTH } from './level.js';
+import { GROUND_Y, platforms, LEVEL_WIDTH, isOverPit } from './level.js';
 
 export const player = {
   x: 60,
@@ -10,12 +10,16 @@ export const player = {
   vy: 0,
   speed: 220,
   
-  // Physics & Mechanics
-  jumpForce: -520,             // Boosted jump power
-  gravity: 1200,               // Smooth arcade gravity
-  maxFallSpeed: 600,
+  // Physics & Jump Settings
+  jumpForce: -520,             // High jump impulse
+  gravity: 1200,               // Strong gravity pull
+  maxFallSpeed: 700,
   grounded: false,
-  doubleJumpAvailable: true,   // Mid-air double jump for high platforms
+  doubleJumpAvailable: true,
+  
+  // Safe position to respawn if falling into a pit
+  lastSafeX: 60,
+  lastSafeY: 300,
   
   // Stats
   hp: 100,
@@ -37,10 +41,12 @@ export const player = {
   dashTimer: 0,
   dashCooldown: 0,
   invulnTimer: 0,
-  swingTimer: 0                // For melee slash FX
+  swingTimer: 0
 };
 
 export function resetPlayer() {
+  player.x = 60;
+  player.y = 0;
   player.hp = player.max;
   player.shield = player.shieldMax;
   player.vx = 0;
@@ -52,6 +58,8 @@ export function resetPlayer() {
   player.dashCooldown = 0;
   player.invulnTimer = 0;
   player.swingTimer = 0;
+  player.lastSafeX = 60;
+  player.lastSafeY = 300;
 }
 
 export function jump() {
@@ -90,7 +98,7 @@ export function applyDamageAndStatus(dmg) {
   }
   
   player.hp = Math.max(0, player.hp - remaining);
-  player.invulnTimer = 0.6; // i-frames duration
+  player.invulnTimer = 0.6; // i-frames
 }
 
 export function attack(enemies, projectiles) {
@@ -179,14 +187,14 @@ export function attack(enemies, projectiles) {
 }
 
 export function updatePlayer(dt, enemies, projectiles, onGameOver) {
-  // Cooldown & Timers
+  // Cooldowns
   if (player.attackCooldown > 0) player.attackCooldown -= dt;
   if (player.dashTimer > 0) player.dashTimer -= dt;
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
   if (player.invulnTimer > 0) player.invulnTimer -= dt;
   if (player.swingTimer > 0) player.swingTimer -= dt;
 
-  // Horizontal Movement
+  // Horizontal Velocity
   let currentSpeed = player.speed;
   if (player.dashTimer > 0) {
     currentSpeed *= 2.6;
@@ -197,50 +205,72 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
     player.facing = player.moveAxis > 0 ? 1 : -1;
   }
 
-  // Gravity
+  // Apply Gravity
   player.vy += player.gravity * dt;
   if (player.vy > player.maxFallSpeed) {
     player.vy = player.maxFallSpeed;
   }
 
-  // Predict position using prevY for precise collision detection
+  // Predict position
   const prevY = player.y;
   player.x += player.vx * dt;
   player.y += player.vy * dt;
 
-  // Level Bound Clamping
+  // Level Horizontal Boundaries
   player.x = Math.max(0, Math.min(LEVEL_WIDTH - player.w, player.x));
 
-  // Reset grounded status each frame
+  // Reset grounded flag
   player.grounded = false;
 
-  // Platform Top Collisions (Only triggers when falling downwards)
+  // 1. Platform Collisions (Takes priority over ground)
   if (player.vy >= 0 && platforms && Array.isArray(platforms)) {
     for (const p of platforms) {
       if (
         player.x + player.w > p.x &&
         player.x < p.x + p.w &&
-        prevY + player.h <= p.y + 4 &&
+        prevY + player.h <= p.y + 6 &&
         player.y + player.h >= p.y
       ) {
         player.y = p.y - player.h;
         player.vy = 0;
         player.grounded = true;
         player.doubleJumpAvailable = true;
+        
+        // Save safe standing spot
+        player.lastSafeX = player.x;
+        player.lastSafeY = player.y;
         break;
       }
     }
   }
 
-  // Ground Collision
-  if (player.y + player.h >= GROUND_Y) {
+  // 2. Ground Collision (ONLY if NOT over a pit gap)
+  const overPit = typeof isOverPit === 'function' && isOverPit(player.x, player.w);
+  
+  if (!overPit && player.y + player.h >= GROUND_Y) {
     player.y = GROUND_Y - player.h;
     player.vy = 0;
     player.grounded = true;
     player.doubleJumpAvailable = true;
+    
+    // Save safe standing spot
+    player.lastSafeX = player.x;
+    player.lastSafeY = player.y;
   }
 
-  // Game over check
+  // 3. Fall Out of Bounds (Fell completely into Pit)
+  if (player.y > GROUND_Y + 150) {
+    // Take pit fall damage
+    applyDamageAndStatus(20);
+    
+    // Respawn at last safe ground position
+    player.x = player.lastSafeX;
+    player.y = player.lastSafeY - 20;
+    player.vx = 0;
+    player.vy = 0;
+  }
+
+  // Check Game Over
   if (player.hp <= 0) {
     onGameOver();
   }
@@ -252,27 +282,27 @@ export function drawPlayer(ctx, camX, camY) {
 
   ctx.save();
 
-  // Flashing effect on invulnerability
+  // Invulnerability flashing
   if (player.invulnTimer > 0 && Math.floor(Date.now() / 80) % 2 === 0) {
     ctx.globalAlpha = 0.4;
   }
 
-  // Dash ghost trail
+  // Dash ghost effect
   if (player.dashTimer > 0) {
     ctx.fillStyle = "rgba(231, 76, 60, 0.35)";
     ctx.fillRect(sx - player.facing * 12, sy, player.w, player.h);
   }
 
-  // Character Body
+  // Body
   ctx.fillStyle = "#e74c3c";
   ctx.fillRect(sx, sy, player.w, player.h);
 
-  // Facing Eye
+  // Eye / Direction
   ctx.fillStyle = "#ffffff";
   const eyeX = player.facing === 1 ? sx + player.w - 8 : sx + 2;
   ctx.fillRect(eyeX, sy + 8, 6, 6);
 
-  // Melee Swing Visual Effect
+  // Melee Arc Visual
   if (player.swingTimer > 0) {
     const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS.sword;
     const range = w.range || 45;
