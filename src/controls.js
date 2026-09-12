@@ -97,6 +97,7 @@ export function initControls(onAttack, onJump, onDash, setMoveAxis) {
 
   function bindTap(id, fn) {
     const el = document.getElementById(id);
+    if (!el) return;
     el.addEventListener('touchstart', e => { e.preventDefault(); fn(); }, { passive: false });
     el.addEventListener('mousedown', e => { e.preventDefault(); fn(); });
   }
@@ -105,11 +106,20 @@ export function initControls(onAttack, onJump, onDash, setMoveAxis) {
   bindTap('attack-btn', onAttack);
   bindTap('dash-btn', onDash);
 
+  function updateKeyAxis() {
+    let axis = 0;
+    if (keys['ArrowLeft'] || keys['a']) axis -= 1;
+    if (keys['ArrowRight'] || keys['d']) axis += 1;
+    setMoveAxis(axis);
+  }
+
   addEventListener('keydown', e => {
     if (keys[e.key]) return;
     keys[e.key] = true;
-    if (e.key === 'ArrowLeft' || e.key === 'a') setMoveAxis(-1);
-    if (e.key === 'ArrowRight' || e.key === 'd') setMoveAxis(1);
+
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'ArrowRight' || e.key === 'd') {
+      updateKeyAxis();
+    }
     if (e.key === ' ' || e.key === 'w' || e.key === 'ArrowUp') onJump();
     if (e.key === 'j') onAttack();
     if (e.key === 'Shift' || e.key === 'k') onDash();
@@ -117,6 +127,8 @@ export function initControls(onAttack, onJump, onDash, setMoveAxis) {
 
   addEventListener('keyup', e => {
     keys[e.key] = false;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') setMoveAxis(0);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') {
+      updateKeyAxis();
+    }
   });
 }
