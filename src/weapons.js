@@ -26,8 +26,47 @@ export const LEGENDARY_WEAPONS = {
   piercer: { name: "Piercer", type: "pierce", baseDmg: 65, range: 700, speed: 750, cooldown: 0.9, legendary: true }
 };
 
+/**
+ * Safely fetches weapon data from normal or legendary collections.
+ */
+export function getWeaponData(weaponKey) {
+  return WEAPONS[weaponKey] || LEGENDARY_WEAPONS[weaponKey] || WEAPONS.sword;
+}
+
+/**
+ * Calculates final damage based on base damage and tier multiplier.
+ */
 export function getWeaponDamage(weaponKey, tierKey) {
-  let w = WEAPONS[weaponKey] || LEGENDARY_WEAPONS[weaponKey] || WEAPONS.sword;
-  let t = TIERS[tierKey] || TIERS.common;
-  return Math.round(w.baseDmg * t.mult);
+  const w = getWeaponData(weaponKey);
+  const t = TIERS[tierKey] || TIERS.common;
+  return Math.round((w.baseDmg || 50) * (t.mult || 1.0));
+}
+
+/**
+ * Utility function to generate a random weapon drop payload.
+ */
+export function getRandomWeaponDrop(isBoss = false, isMiniBoss = false) {
+  const weaponPool = (isBoss || isMiniBoss) && Math.random() < 0.4
+    ? Object.keys(LEGENDARY_WEAPONS)
+    : Object.keys(WEAPONS);
+
+  const weaponKey = weaponPool[Math.floor(Math.random() * weaponPool.length)];
+  const isLegendary = Boolean(LEGENDARY_WEAPONS[weaponKey]);
+
+  let tierKey = 'common';
+  const rand = Math.random();
+  if (isBoss || isLegendary) {
+    tierKey = rand < 0.6 ? 'legendary' : 'epic';
+  } else if (isMiniBoss) {
+    tierKey = rand < 0.5 ? 'epic' : 'rare';
+  } else {
+    if (rand < 0.05) tierKey = 'legendary';
+    else if (rand < 0.20) tierKey = 'epic';
+    else if (rand < 0.50) tierKey = 'rare';
+  }
+
+  const elemKeys = Object.keys(ELEMENTS);
+  const elementKey = elemKeys[Math.floor(Math.random() * elemKeys.length)];
+
+  return { weaponKey, tierKey, elementKey, isLegendary };
 }
