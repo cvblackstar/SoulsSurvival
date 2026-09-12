@@ -44,12 +44,9 @@ function resize() {
   const inPortrait = isPortraitViewport();
   isLandscape = !inPortrait;
 
-  // The CSS rotate-hack swaps the visual box dimensions on portrait phones:
-  // what's actually on-screen is (innerHeight x innerWidth), not (innerWidth x innerHeight).
   const boxWidth = inPortrait ? window.innerHeight : window.innerWidth;
   const boxHeight = inPortrait ? window.innerWidth : window.innerHeight;
 
-  // Maintain vertical standard 640px height
   H = 640;
   const aspectRatio = boxWidth / boxHeight;
   W = Math.floor(H * aspectRatio);
@@ -208,9 +205,9 @@ function update(dt) {
         player.weaponKey = d.weaponKey;
         player.tierKey = d.tierKey;
         player.elementKey = d.elementKey || "none";
-        const w = WEAPONS[d.weaponKey] || LEGENDARY_WEAPONS[d.weaponKey];
-        const t = TIERS[d.tierKey];
-        const elem = ELEMENTS[player.elementKey];
+        const w = WEAPONS[d.weaponKey] || LEGENDARY_WEAPONS[d.weaponKey] || { name: 'Weapon' };
+        const t = TIERS[d.tierKey] || { name: 'Common' };
+        const elem = ELEMENTS[player.elementKey] || ELEMENTS.none;
         const dmg = getWeaponDamage(d.weaponKey, d.tierKey);
         const equipMsg = d.isLegendary
           ? `LEGENDARY! [${elem.name}] [${t.name}] ${w.name} (${dmg} DMG)!`
@@ -276,10 +273,11 @@ function update(dt) {
 
   updateEnemies(dt, player, projectiles, (dmg) => applyDamageAndStatus(dmg), handleEnemyDeath);
 
-  // Camera tracking
+  // Safe Camera Tracking (Vertical & Horizontal Clamping)
   camX = clamp(player.x + player.w / 2 - W / 2, 0, Math.max(0, LEVEL_WIDTH - W));
-  const targetCamY = player.y + player.h / 2 - H * 0.65;
-  camY = clamp(targetCamY, 0, Math.max(0, LEVEL_HEIGHT - H));
+  const maxCamY = Math.max(0, (typeof LEVEL_HEIGHT !== 'undefined' ? LEVEL_HEIGHT : 640) - H);
+  const targetCamY = player.y + player.h / 2 - H * 0.55;
+  camY = clamp(targetCamY, 0, maxCamY);
 
   if (bossDefeated &&
       player.x + player.w > goal.x && player.x < goal.x + goal.w &&
@@ -419,8 +417,8 @@ function draw() {
     ctx.beginPath(); ctx.arc(p.x - camX, p.y - camY, p.r, 0, Math.PI * 2); ctx.fill();
   });
 
-  const curW = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey];
-  const curT = TIERS[player.tierKey];
+  const curW = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || { name: 'Broadsword' };
+  const curT = TIERS[player.tierKey] || { name: 'Common', color: '#fff' };
   const curE = ELEMENTS[player.elementKey] || ELEMENTS.none;
   const curDmg = getWeaponDamage(player.weaponKey, player.tierKey);
 
@@ -468,7 +466,9 @@ function draw() {
 }
 
 function loop(t) {
-  const dt = Math.min(0.033, (t - last) / 1000 || 0.016);
+  // Cap deltaTime to avoid extreme time steps on tab switches or stutter frames
+  const rawDt = (t - last) / 1000;
+  const dt = Math.min(0.033, Math.max(0.001, rawDt || 0.016));
   last = t;
 
   if (gameState === 'playing' && player.hp > 0) update(dt);
