@@ -78,11 +78,14 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
   // Level horizontal bounds check
   player.x = Math.max(0, Math.min(LEVEL_WIDTH - player.w, player.x));
 
-  // Platform collisions
+  // Precise Platform Collision check (Fixes floating/freezing mid-air)
   player.grounded = false;
+  const prevY = player.y - player.vy * dt;
+
   for (const p of platforms) {
     if (player.x + player.w > p.x && player.x < p.x + p.w) {
-      if (player.y + player.h >= p.y && player.y + player.h - player.vy * dt <= p.y + 14) {
+      // Check that the player was above the platform top in the previous frame and falling down
+      if (player.vy >= 0 && prevY + player.h <= p.y + 6 && player.y + player.h >= p.y) {
         player.y = p.y - player.h;
         player.vy = 0;
         player.grounded = true;
@@ -90,7 +93,7 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
     }
   }
 
-  // Floor collision
+  // Floor collision check
   if (player.y + player.h >= GROUND_Y) {
     player.y = GROUND_Y - player.h;
     player.vy = 0;
