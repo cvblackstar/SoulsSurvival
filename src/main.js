@@ -66,9 +66,9 @@ function resize() {
 }
 
 initControls(
-  () => attack(enemies, projectiles),
-  () => jump(),
-  () => dash(),
+  () => { if (gameState === 'playing') attack(enemies, projectiles); },
+  () => { if (gameState === 'playing') jump(); },
+  () => { if (gameState === 'playing') dash(); },
   (axis) => { player.moveAxis = axis; }
 );
 
@@ -89,6 +89,34 @@ const pauseScreen = document.getElementById('pause-screen');
 const resumeBtn = document.getElementById('resume-btn');
 const quitBtn = document.getElementById('quit-btn');
 
+// Optional DOM HUD overlay elements (if rendered via HTML)
+const domHud = document.getElementById('hud');
+const domHpBar = document.getElementById('hp-bar');
+const domShieldBar = document.getElementById('shield-bar');
+const domWeaponDisplay = document.getElementById('weapon-display');
+
+function syncDomHud() {
+  if (!domHud) return;
+  if (gameState === 'playing' || gameState === 'transition') {
+    domHud.classList.remove('hidden');
+    if (domHpBar) domHpBar.style.width = `${Math.max(0, (player.hp / player.max) * 100)}%`;
+    if (domShieldBar && player.shieldMax > 0) {
+      domShieldBar.parentElement.style.display = 'block';
+      domShieldBar.style.width = `${Math.max(0, (player.shield / player.shieldMax) * 100)}%`;
+    } else if (domShieldBar) {
+      domShieldBar.parentElement.style.display = 'none';
+    }
+    if (domWeaponDisplay) {
+      const curW = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || { name: 'Broadsword' };
+      const curT = TIERS[player.tierKey] || { name: 'Common' };
+      const curDmg = getWeaponDamage(player.weaponKey, player.tierKey);
+      domWeaponDisplay.textContent = `[${curT.name}] ${curW.name} (${curDmg} DMG)`;
+    }
+  } else {
+    domHud.classList.add('hidden');
+  }
+}
+
 function pauseGame() {
   if (gameState !== 'playing') return;
   gameState = 'paused';
@@ -106,7 +134,9 @@ resumeBtn.addEventListener('click', resumeGame);
 quitBtn.addEventListener('click', () => {
   pauseScreen.classList.add('hidden');
   gameState = 'menu';
+  player.moveAxis = 0; // Clear inputs
   menuScreen.classList.remove('hidden');
+  syncDomHud();
 });
 
 function selectDifficulty(d) {
@@ -132,6 +162,7 @@ function startGame() {
   resetPlayer();
   player.x = startX;
   player.y = startY;
+  player.moveAxis = 0;
 
   resetCompanion(player.x, player.y);
   
@@ -141,13 +172,16 @@ function startGame() {
   bossDefeated = false;
   setMsg("Reach the end of the stage and defeat the boss!", 4);
   gameState = 'playing';
+  syncDomHud();
 }
 
 function gameOver() {
   gameState = 'gameover';
+  player.moveAxis = 0;
   const pct = Math.floor((player.x / LEVEL_WIDTH) * 100);
   gameoverStats.textContent = `Stage ${stage} - you reached ${pct}% of the way through`;
   gameoverScreen.classList.remove('hidden');
+  syncDomHud();
 }
 
 function startTransition() {
@@ -275,6 +309,7 @@ function update(dt) {
         if (p.x > e.x - p.r && p.x < e.x + e.w + p.r &&
             p.y > e.y - p.r && p.y < e.y + e.h + p.r) {
           if (p.pierce) {
+            if (!p.hitList) p.hitList = [];
             if (!p.hitList.includes(e)) { applyHitToEnemy(e, p.dmg, p.elem); p.hitList.push(e); }
           } else {
             applyHitToEnemy(e, p.dmg, p.elem);
@@ -292,21 +327,24 @@ function update(dt) {
 
   // Safe Camera Tracking (Vertical & Horizontal Clamping)
   camX = clamp(player.x + player.w / 2 - W / 2, 0, Math.max(0, LEVEL_WIDTH - W));
-  const maxCamY = Math.max(0, (typeof LEVEL_HEIGHT !== 'undefined' ? LEVEL_HEIGHT : 640) - H);
+  const levelH = typeof LEVEL_HEIGHT !== 'undefined' ? LEVEL_HEIGHT : 640;
+  const maxCamY = Math.max(0, levelH - H);
   const targetCamY = player.y + player.h / 2 - H * 0.55;
   camY = clamp(targetCamY, 0, maxCamY);
 
-  if (bossDefeated &&
+  if (bossDefeated && goal &&
       player.x + player.w > goal.x && player.x < goal.x + goal.w &&
       player.y + player.h > goal.y && player.y < goal.y + goal.h) {
     startTransition();
   }
+
+  syncDomHud();
 }
 
 function bar(x, y, w, h, val, max, label, color) {
   ctx.fillStyle = "#000a"; ctx.fillRect(x, y, w, h);
   ctx.fillStyle = color || (label === "PLAYER" ? "#57b56a" : "#d9a24c");
-  ctx.fillRect(x, y, Math.max(0, w * (val / max)), h);
+  ctx.fillRect(x, y, Math.max(0, w * (val / Math.max(1, max))), h);
   ctx.strokeStyle = "#fff6"; ctx.strokeRect(x, y, w, h);
   ctx.fillStyle = "#fff"; ctx.font = "11px system-ui"; ctx.fillText(label, x + 4, y + h - 3);
 }
@@ -332,51 +370,55 @@ function drawBackground() {
 }
 
 function drawLevel() {
-  for (const p of platforms) {
-    if (p.invisible) continue;
-    const sx = p.x - camX;
-    const sy = p.y - camY;
-    if (sx + p.w < 0 || sx > W || sy + p.h < 0 || sy > H) continue;
+  if (platforms && Array.isArray(platforms)) {
+    for (const p of platforms) {
+      if (p.invisible) continue;
+      const sx = p.x - camX;
+      const sy = p.y - camY;
+      if (sx + p.w < 0 || sx > W || sy + p.h < 0 || sy > H) continue;
 
-    ctx.fillStyle = "#3d5a3d";
-    ctx.fillRect(sx, sy, p.w, 10);
-    ctx.fillStyle = "#2a3f2a";
-    ctx.fillRect(sx, sy + 10, p.w, p.h - 10);
+      ctx.fillStyle = "#3d5a3d";
+      ctx.fillRect(sx, sy, p.w, 10);
+      ctx.fillStyle = "#2a3f2a";
+      ctx.fillRect(sx, sy + 10, p.w, p.h - 10);
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(sx, sy, p.w, Math.min(p.h, H - sy));
-    ctx.clip();
-
-    ctx.fillStyle = "#5c8a5c";
-    const tuftSpacing = 14;
-    for (let wx = Math.floor(p.x / tuftSpacing) * tuftSpacing; wx < p.x + p.w; wx += tuftSpacing) {
-      ctx.fillRect(wx - camX, sy, 3, 5);
-    }
-
-    ctx.strokeStyle = "rgba(0,0,0,0.28)";
-    ctx.lineWidth = 2;
-    const tickSpacing = 22;
-    for (let wx = Math.floor((p.x - 20) / tickSpacing) * tickSpacing; wx < p.x + p.w + 20; wx += tickSpacing) {
-      const sxT = wx - camX;
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(sxT, sy + 16);
-      ctx.lineTo(sxT + 12, sy + p.h);
-      ctx.stroke();
+      ctx.rect(sx, sy, p.w, Math.min(p.h, H - sy));
+      ctx.clip();
+
+      ctx.fillStyle = "#5c8a5c";
+      const tuftSpacing = 14;
+      for (let wx = Math.floor(p.x / tuftSpacing) * tuftSpacing; wx < p.x + p.w; wx += tuftSpacing) {
+        ctx.fillRect(wx - camX, sy, 3, 5);
+      }
+
+      ctx.strokeStyle = "rgba(0,0,0,0.28)";
+      ctx.lineWidth = 2;
+      const tickSpacing = 22;
+      for (let wx = Math.floor((p.x - 20) / tickSpacing) * tickSpacing; wx < p.x + p.w + 20; wx += tickSpacing) {
+        const sxT = wx - camX;
+        ctx.beginPath();
+        ctx.moveTo(sxT, sy + 16);
+        ctx.lineTo(sxT + 12, sy + p.h);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.restore();
   }
 
-  const gsx = goal.x - camX;
-  const gsy = goal.y - camY;
-  if (gsx + goal.w > 0 && gsx < W) {
-    ctx.fillStyle = bossDefeated ? "#f1c40f" : "#555";
-    ctx.fillRect(gsx, gsy, 6, goal.h);
-    ctx.beginPath();
-    ctx.moveTo(gsx + 6, gsy);
-    ctx.lineTo(gsx + 34, gsy + 14);
-    ctx.lineTo(gsx + 6, gsy + 28);
-    ctx.fill();
+  if (goal) {
+    const gsx = goal.x - camX;
+    const gsy = goal.y - camY;
+    if (gsx + goal.w > 0 && gsx < W) {
+      ctx.fillStyle = bossDefeated ? "#f1c40f" : "#555";
+      ctx.fillRect(gsx, gsy, 6, goal.h);
+      ctx.beginPath();
+      ctx.moveTo(gsx + 6, gsy);
+      ctx.lineTo(gsx + 34, gsy + 14);
+      ctx.lineTo(gsx + 6, gsy + 28);
+      ctx.fill();
+    }
   }
 }
 
