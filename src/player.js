@@ -23,7 +23,7 @@ export const player = {
   dashTimer: 0,
   dashCooldown: 0,
   attackCooldown: 0,
-  attackAnimTimer: 0, // Timer for melee slash animation
+  attackAnimTimer: 0,
   facing: 1, // 1 = Right, -1 = Left
   animTimer: 0
 };
@@ -47,12 +47,10 @@ export function resetPlayer() {
 }
 
 export function updatePlayer(dt, enemies, projectiles, onGameOver) {
-  // Update Cooldowns & Animation Timers
   if (player.dashCooldown > 0) player.dashCooldown -= dt;
   if (player.attackCooldown > 0) player.attackCooldown -= dt;
   if (player.attackAnimTimer > 0) player.attackAnimTimer -= dt;
 
-  // Horizontal Movement
   if (player.isDashing) {
     player.dashTimer -= dt;
     player.vx = player.facing * player.speed * 2.5;
@@ -68,21 +66,14 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
     }
   }
 
-  // Gravity
   player.vy += GRAVITY * dt;
-
-  // Resolve platform collision (returns false when floating over a pit)
   player.grounded = resolveCollisions(player, dt);
-
-  // Keep player inside level left/right boundaries
   player.x = Math.max(0, Math.min(LEVEL_WIDTH - player.w, player.x));
 
-  // Pit Death Condition (Falling below screen height 640)
   if (player.y > 640) {
     player.hp = 0;
   }
 
-  // Trigger Game Over callback
   if (player.hp <= 0 && onGameOver) {
     onGameOver();
   }
@@ -94,12 +85,11 @@ export function attack(enemies, projectiles) {
   const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS['sword'];
   if (!w) return;
 
-  // Calculate damage with fallback starter value (20 base dmg)
   let dmg = getWeaponDamage ? getWeaponDamage(player.weaponKey, player.tierKey) : (w.damage || 20);
   if (!dmg || dmg <= 0) dmg = w.damage || 20;
 
   player.attackCooldown = w.cooldown || 0.35;
-  player.attackAnimTimer = 0.18; // Slash animation stays visible for 0.18 seconds
+  player.attackAnimTimer = 0.2; // Keep slash on screen for 0.2s
 
   if (w.type !== 'melee') {
     projectiles.push({
@@ -171,6 +161,7 @@ export function drawPlayer(ctx, camX, camY = 0) {
   const sx = player.x - camX;
   const sy = player.y - camY;
 
+  // 1. Draw Player Character Sprite
   ctx.save();
   ctx.translate(sx + player.w / 2, sy + player.h / 2);
 
@@ -183,17 +174,14 @@ export function drawPlayer(ctx, camX, camY = 0) {
     ctx.scale(-1, 1);
   }
 
-  // Body
   ctx.fillStyle = "#3498db";
   ctx.fillRect(-player.w / 2, -player.h / 2 + 8, player.w, player.h - 14);
 
-  // Head & Visor
   ctx.fillStyle = "#ecf0f1";
   ctx.fillRect(-player.w / 2 + 2, -player.h / 2, player.w - 4, 10);
   ctx.fillStyle = "#2c3e50";
   ctx.fillRect(1, -player.h / 2 + 3, 7, 3);
 
-  // Legs Animation
   const isMoving = Math.abs(player.vx) > 5;
   const stride = isMoving ? Math.sin(player.animTimer) * 7 : 0;
 
@@ -201,21 +189,37 @@ export function drawPlayer(ctx, camX, camY = 0) {
   ctx.fillRect(-player.w / 2 + 3, player.h / 2 - 8, 5, 8 + (isMoving ? stride : 0));
   ctx.fillRect(player.w / 2 - 8, player.h / 2 - 8, 5, 8 - (isMoving ? stride : 0));
 
-  // Melee Weapon Swing Slash Arc
-  if (player.attackAnimTimer > 0) {
-    ctx.strokeStyle = "#f39c12";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(10, 0, 32, -Math.PI / 3, Math.PI / 3, false);
-    ctx.stroke();
-
-    // Inner glow
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(10, 0, 30, -Math.PI / 3, Math.PI / 3, false);
-    ctx.stroke();
-  }
-
   ctx.restore();
+
+  // 2. Draw Melee Slash Animation in Absolute Screen Space
+  if (player.attackAnimTimer > 0) {
+    const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS['sword'];
+    
+    // Only render slash arc if using a melee weapon
+    if (!w || w.type === 'melee' || !w.type) {
+      ctx.save();
+      const centerX = sx + (player.facing === 1 ? player.w + 10 : -10);
+      const centerY = sy + player.h / 2;
+
+      ctx.strokeStyle = "#f39c12";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      
+      // Angle direction based on facing direction
+      const startAngle = player.facing === 1 ? -Math.PI / 3 : (2 * Math.PI) / 3;
+      const endAngle = player.facing === 1 ? Math.PI / 3 : (4 * Math.PI) / 3;
+
+      ctx.arc(centerX, centerY, 28, startAngle, endAngle, false);
+      ctx.stroke();
+
+      // White inner core line for slash effect
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 26, startAngle, endAngle, false);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
 }
