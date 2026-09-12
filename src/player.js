@@ -10,9 +10,9 @@ export const player = {
   vy: 0,
   speed: 220,
   
-  // Physics & Boosted Jumping
-  jumpForce: -520,             // Boosted upward jump impulse
-  gravity: 1200,               // Smooth arcade gravity arc
+  // Physics & Mechanics
+  jumpForce: -520,             // Boosted jump power
+  gravity: 1200,               // Smooth arcade gravity
   maxFallSpeed: 600,
   grounded: false,
   doubleJumpAvailable: true,   // Mid-air double jump for high platforms
@@ -37,7 +37,7 @@ export const player = {
   dashTimer: 0,
   dashCooldown: 0,
   invulnTimer: 0,
-  swingTimer: 0                // For melee slash animation
+  swingTimer: 0                // For melee slash FX
 };
 
 export function resetPlayer() {
@@ -61,7 +61,7 @@ export function jump() {
     player.grounded = false;
     player.doubleJumpAvailable = true;
   } 
-  // Mid-air double jump to guarantee reaching tall platforms
+  // Mid-air double jump
   else if (player.doubleJumpAvailable) {
     player.vy = player.jumpForce * 0.88;
     player.doubleJumpAvailable = false;
@@ -186,7 +186,7 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
   if (player.invulnTimer > 0) player.invulnTimer -= dt;
   if (player.swingTimer > 0) player.swingTimer -= dt;
 
-  // Speed & Movement
+  // Horizontal Movement
   let currentSpeed = player.speed;
   if (player.dashTimer > 0) {
     currentSpeed *= 2.6;
@@ -203,33 +203,25 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
     player.vy = player.maxFallSpeed;
   }
 
-  // Update Positions
+  // Predict position using prevY for precise collision detection
+  const prevY = player.y;
   player.x += player.vx * dt;
   player.y += player.vy * dt;
 
   // Level Bound Clamping
   player.x = Math.max(0, Math.min(LEVEL_WIDTH - player.w, player.x));
 
-  // Reset ground state
+  // Reset grounded status each frame
   player.grounded = false;
 
-  // Ground Collision Check
-  if (player.y + player.h >= GROUND_Y) {
-    player.y = GROUND_Y - player.h;
-    player.vy = 0;
-    player.grounded = true;
-    player.doubleJumpAvailable = true;
-  }
-
-  // Platform Collisions (Top-down landing)
-  if (platforms && Array.isArray(platforms)) {
+  // Platform Top Collisions (Only triggers when falling downwards)
+  if (player.vy >= 0 && platforms && Array.isArray(platforms)) {
     for (const p of platforms) {
       if (
-        player.vy >= 0 &&
         player.x + player.w > p.x &&
         player.x < p.x + p.w &&
-        player.y + player.h >= p.y &&
-        player.y + player.h - player.vy * dt <= p.y + 14
+        prevY + player.h <= p.y + 4 &&
+        player.y + player.h >= p.y
       ) {
         player.y = p.y - player.h;
         player.vy = 0;
@@ -238,6 +230,14 @@ export function updatePlayer(dt, enemies, projectiles, onGameOver) {
         break;
       }
     }
+  }
+
+  // Ground Collision
+  if (player.y + player.h >= GROUND_Y) {
+    player.y = GROUND_Y - player.h;
+    player.vy = 0;
+    player.grounded = true;
+    player.doubleJumpAvailable = true;
   }
 
   // Game over check
@@ -252,27 +252,27 @@ export function drawPlayer(ctx, camX, camY) {
 
   ctx.save();
 
-  // Invulnerability flashing
+  // Flashing effect on invulnerability
   if (player.invulnTimer > 0 && Math.floor(Date.now() / 80) % 2 === 0) {
     ctx.globalAlpha = 0.4;
   }
 
-  // Dash effect trail
+  // Dash ghost trail
   if (player.dashTimer > 0) {
     ctx.fillStyle = "rgba(231, 76, 60, 0.35)";
     ctx.fillRect(sx - player.facing * 12, sy, player.w, player.h);
   }
 
-  // Player Body
+  // Character Body
   ctx.fillStyle = "#e74c3c";
   ctx.fillRect(sx, sy, player.w, player.h);
 
-  // Facing Direction Eye
+  // Facing Eye
   ctx.fillStyle = "#ffffff";
   const eyeX = player.facing === 1 ? sx + player.w - 8 : sx + 2;
   ctx.fillRect(eyeX, sy + 8, 6, 6);
 
-  // Melee Attack Arc FX
+  // Melee Swing Visual Effect
   if (player.swingTimer > 0) {
     const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS.sword;
     const range = w.range || 45;
