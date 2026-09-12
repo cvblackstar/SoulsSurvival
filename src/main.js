@@ -2,7 +2,7 @@ import { player, updatePlayer, attack, jump, dash, drawPlayer, applyDamageAndSta
 import { wolf, updateCompanion, drawCompanion, resetCompanion } from './companion.js';
 import { enemies, drops, bossActive, resetEnemies, updateEnemies, updateDrops, drawEnemiesAndDrops, spawnDrop, setDifficulty, applyHitToEnemy } from './enemies.js';
 import { WEAPONS, LEGENDARY_WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
-import { LEVEL_WIDTH, LEVEL_HEIGHT, GROUND_Y, platforms, goal } from './level.js';
+import { LEVEL_WIDTH, LEVEL_HEIGHT, GROUND_Y, platforms, goal, playerStart } from './level.js';
 import { initControls } from './controls.js';
 
 const c = document.getElementById('game'), ctx = c.getContext('2d');
@@ -124,8 +124,17 @@ function startGame() {
   stage = 1;
   setDifficulty(selectedDifficulty);
   resetEnemies(1);
+  
+  // Set player position from level.js configuration
+  const startX = playerStart ? playerStart.x : 60;
+  const startY = playerStart ? playerStart.y : GROUND_Y - 40;
+  
   resetPlayer();
+  player.x = startX;
+  player.y = startY;
+
   resetCompanion(player.x, player.y);
+  
   projectiles = [];
   camX = 0;
   camY = 0;
@@ -152,8 +161,16 @@ function advanceStage() {
   stage = pendingStage;
   const stageMult = Math.pow(1.05, stage - 1);
   resetEnemies(stageMult);
+  
+  const startX = playerStart ? playerStart.x : 60;
+  const startY = playerStart ? playerStart.y : GROUND_Y - 40;
+
   resetPlayer();
+  player.x = startX;
+  player.y = startY;
+
   resetCompanion(player.x, player.y);
+  
   projectiles = [];
   camX = 0;
   camY = 0;
@@ -466,7 +483,6 @@ function draw() {
 }
 
 function loop(t) {
-  // Cap deltaTime to avoid extreme time steps on tab switches or stutter frames
   const rawDt = (t - last) / 1000;
   const dt = Math.min(0.033, Math.max(0.001, rawDt || 0.016));
   last = t;
