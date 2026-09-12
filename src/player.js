@@ -15,7 +15,7 @@ export const player = {
   max: 100,
   shield: 0,
   shieldMax: 0,
-  weaponKey: 'broadsword',
+  weaponKey: 'sword',
   tierKey: 'common',
   elementKey: 'none',
   moveAxis: 0,
@@ -112,7 +112,7 @@ export function attack(enemies, projectiles) {
   const dmg = getWeaponDamage(player.weaponKey, player.tierKey);
   player.attackCooldown = w.cooldown || 0.35;
 
-  if (w.type === 'ranged') {
+  if (w.type !== 'melee') {
     // Ranged projectile creation
     projectiles.push({
       x: player.x + (player.facing === 1 ? player.w + 4 : -10),

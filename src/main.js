@@ -42,26 +42,28 @@ function isPortraitViewport() {
 function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   const inPortrait = isPortraitViewport();
-  
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  
-  // Maintain vertical standard 640px height
-  H = 640;
-  const aspectRatio = viewportWidth / viewportHeight;
-  W = Math.floor(H * aspectRatio);
   isLandscape = !inPortrait;
 
-  c.width = viewportWidth * dpr;
-  c.height = viewportHeight * dpr;
-  
-  c.style.width = viewportWidth + 'px';
-  c.style.height = viewportHeight + 'px';
-  
+  // The CSS rotate-hack swaps the visual box dimensions on portrait phones:
+  // what's actually on-screen is (innerHeight x innerWidth), not (innerWidth x innerHeight).
+  const boxWidth = inPortrait ? window.innerHeight : window.innerWidth;
+  const boxHeight = inPortrait ? window.innerWidth : window.innerHeight;
+
+  // Maintain vertical standard 640px height
+  H = 640;
+  const aspectRatio = boxWidth / boxHeight;
+  W = Math.floor(H * aspectRatio);
+
+  c.width = boxWidth * dpr;
+  c.height = boxHeight * dpr;
+
+  c.style.width = boxWidth + 'px';
+  c.style.height = boxHeight + 'px';
+
   if (ctx) {
     ctx.setTransform(
-      (viewportWidth / W) * dpr, 0, 0,
-      (viewportHeight / H) * dpr, 0, 0
+      (boxWidth / W) * dpr, 0, 0,
+      (boxHeight / H) * dpr, 0, 0
     );
   }
 }

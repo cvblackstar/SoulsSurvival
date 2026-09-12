@@ -1,5 +1,21 @@
 export let keys = {};
 
+// When the CSS rotate-hack is active (phone held in portrait), the browser still
+// reports touch/mouse coordinates in the raw, unrotated viewport frame. We have to
+// remap them into the visually-rotated "game space" frame ourselves, or drag
+// gestures measure the wrong axis entirely.
+function isPortraitHack() {
+  return window.matchMedia('(orientation: portrait)').matches;
+}
+
+function toGameXY(clientX, clientY) {
+  if (isPortraitHack()) {
+    // body is rotated -90deg: raw (x,y) -> game (innerHeight - y, x)
+    return { x: window.innerHeight - clientY, y: clientX };
+  }
+  return { x: clientX, y: clientY };
+}
+
 export function initControls(onAttack, onJump, onDash, setMoveAxis) {
   const joyZone = document.getElementById('joystick-zone');
   const joyBase = document.getElementById('joy-base');
@@ -13,8 +29,9 @@ export function initControls(onAttack, onJump, onDash, setMoveAxis) {
     if (joyTouchId !== null) return;
     const touch = e.changedTouches[0];
     joyTouchId = touch.identifier;
-    joyStart.x = touch.clientX;
-    joyStart.y = touch.clientY;
+    const p = toGameXY(touch.clientX, touch.clientY);
+    joyStart.x = p.x;
+    joyStart.y = p.y;
     joyBase.style.left = joyStart.x + 'px';
     joyBase.style.top = joyStart.y + 'px';
     joyBase.style.display = 'block';
@@ -25,8 +42,9 @@ export function initControls(onAttack, onJump, onDash, setMoveAxis) {
     e.preventDefault();
     for (const touch of e.changedTouches) {
       if (touch.identifier === joyTouchId) {
-        let dx = touch.clientX - joyStart.x;
-        let dy = touch.clientY - joyStart.y;
+        const p = toGameXY(touch.clientX, touch.clientY);
+        let dx = p.x - joyStart.x;
+        let dy = p.y - joyStart.y;
         const dist = Math.hypot(dx, dy);
         if (dist > maxRadius) {
           dx = (dx / dist) * maxRadius;
@@ -55,14 +73,16 @@ export function initControls(onAttack, onJump, onDash, setMoveAxis) {
   let mouseDown = false;
   joyZone.addEventListener('mousedown', e => {
     mouseDown = true;
-    joyStart.x = e.clientX; joyStart.y = e.clientY;
+    const p = toGameXY(e.clientX, e.clientY);
+    joyStart.x = p.x; joyStart.y = p.y;
     joyBase.style.left = joyStart.x + 'px';
     joyBase.style.top = joyStart.y + 'px';
     joyBase.style.display = 'block';
   });
   addEventListener('mousemove', e => {
     if (!mouseDown) return;
-    let dx = e.clientX - joyStart.x;
+    const p = toGameXY(e.clientX, e.clientY);
+    let dx = p.x - joyStart.x;
     const dist = Math.abs(dx);
     if (dist > maxRadius) dx = (dx / dist) * maxRadius;
     joyStick.style.transform = `translate(${dx}px, 0px)`;
