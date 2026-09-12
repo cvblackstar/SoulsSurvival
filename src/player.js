@@ -1,236 +1,296 @@
-import { LEVEL_WIDTH, GRAVITY, resolveCollisions } from './level.js';
-import { WEAPONS, LEGENDARY_WEAPONS, TIERS, getWeaponDamage } from './weapons.js';
+import { WEAPONS, LEGENDARY_WEAPONS, TIERS, ELEMENTS, getWeaponDamage } from './weapons.js';
+import { GROUND_Y, platforms, LEVEL_WIDTH } from './level.js';
 
 export const player = {
   x: 60,
-  y: 300,
-  w: 24,
-  h: 36,
+  y: 0,
+  w: 28,
+  h: 38,
   vx: 0,
   vy: 0,
-  speed: 216, // Boosted base movement speed by 20% (180 -> 216)
-  jumpForce: 450,
+  speed: 220,
+  
+  // Physics & Boosted Jumping
+  jumpForce: -520,             // Boosted upward jump impulse
+  gravity: 1200,               // Smooth arcade gravity arc
+  maxFallSpeed: 600,
   grounded: false,
+  doubleJumpAvailable: true,   // Mid-air double jump for high platforms
+  
+  // Stats
   hp: 100,
   max: 100,
   shield: 0,
   shieldMax: 0,
+  
+  // Controls & Direction
+  moveAxis: 0,
+  facing: 1,
+  
+  // Equipment
   weaponKey: 'sword',
   tierKey: 'common',
   elementKey: 'none',
-  moveAxis: 0,
-  isDashing: false,
+  
+  // Timers & State
+  attackCooldown: 0,
   dashTimer: 0,
   dashCooldown: 0,
-  attackCooldown: 0,
-  attackAnimTimer: 0,
-  facing: 1, // 1 = Right, -1 = Left
-  animTimer: 0
+  invulnTimer: 0,
+  swingTimer: 0                // For melee slash animation
 };
 
 export function resetPlayer() {
-  player.x = 60;
-  player.y = 300;
-  player.vx = 0;
-  player.vy = 0;
   player.hp = player.max;
   player.shield = player.shieldMax;
+  player.vx = 0;
+  player.vy = 0;
   player.grounded = false;
-  player.isDashing = false;
+  player.doubleJumpAvailable = true;
+  player.attackCooldown = 0;
   player.dashTimer = 0;
   player.dashCooldown = 0;
-  player.attackCooldown = 0;
-  player.attackAnimTimer = 0;
-  player.moveAxis = 0;
-  player.facing = 1;
-  player.animTimer = 0;
+  player.invulnTimer = 0;
+  player.swingTimer = 0;
 }
 
-export function updatePlayer(dt, enemies, projectiles, onGameOver) {
-  // Update Cooldowns & Animation Timers
-  if (player.dashCooldown > 0) player.dashCooldown -= dt;
-  if (player.attackCooldown > 0) player.attackCooldown -= dt;
-  if (player.attackAnimTimer > 0) player.attackAnimTimer -= dt;
+export function jump() {
+  // Ground jump
+  if (player.grounded) {
+    player.vy = player.jumpForce;
+    player.grounded = false;
+    player.doubleJumpAvailable = true;
+  } 
+  // Mid-air double jump to guarantee reaching tall platforms
+  else if (player.doubleJumpAvailable) {
+    player.vy = player.jumpForce * 0.88;
+    player.doubleJumpAvailable = false;
+  }
+}
 
-  // Horizontal Movement & Dashing
-  if (player.isDashing) {
-    player.dashTimer -= dt;
-    player.vx = player.facing * player.speed * 2.5;
-    if (player.dashTimer <= 0) player.isDashing = false;
-  } else {
-    if (player.moveAxis !== 0) {
-      player.facing = player.moveAxis > 0 ? 1 : -1;
-      player.vx = player.moveAxis * player.speed;
-      player.animTimer += dt * 10;
+export function dash() {
+  if (player.dashCooldown <= 0) {
+    player.dashTimer = 0.18;
+    player.dashCooldown = 0.8;
+  }
+}
+
+export function applyDamageAndStatus(dmg) {
+  if (player.invulnTimer > 0) return;
+  
+  let remaining = dmg;
+  if (player.shield > 0) {
+    if (player.shield >= remaining) {
+      player.shield -= remaining;
+      remaining = 0;
     } else {
-      player.vx = 0;
-      player.animTimer = 0;
+      remaining -= player.shield;
+      player.shield = 0;
     }
   }
-
-  // Gravity & Platform Collision
-  player.vy += GRAVITY * dt;
-  player.grounded = resolveCollisions(player, dt);
-
-  // Level Boundaries
-  player.x = Math.max(0, Math.min(LEVEL_WIDTH - player.w, player.x));
-
-  // Pit Fall Death Condition (falling below screen space)
-  if (player.y > 640) {
-    player.hp = 0;
-  }
-
-  // Game Over Check
-  if (player.hp <= 0 && onGameOver) {
-    onGameOver();
-  }
+  
+  player.hp = Math.max(0, player.hp - remaining);
+  player.invulnTimer = 0.6; // i-frames duration
 }
 
 export function attack(enemies, projectiles) {
   if (player.attackCooldown > 0) return;
 
-  const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS['sword'];
-  if (!w) return;
+  const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS.sword;
+  const dmg = getWeaponDamage(player.weaponKey, player.tierKey);
+  const elem = player.elementKey || "none";
 
-  // Calculate damage with starter weapon fallback
-  let dmg = typeof getWeaponDamage === 'function' ? getWeaponDamage(player.weaponKey, player.tierKey) : (w.damage || 20);
-  if (!dmg || dmg <= 0) dmg = w.damage || 20;
+  player.attackCooldown = w.cooldown || 0.4;
 
-  player.attackCooldown = w.cooldown || 0.35;
-  player.attackAnimTimer = 0.2; // Slash visual stays on screen for 0.2s
+  const px = player.x + player.w / 2;
+  const py = player.y + player.h / 2;
 
-  if (w.type && w.type !== 'melee') {
-    // Ranged Projectile Attack
-    projectiles.push({
-      x: player.x + (player.facing === 1 ? player.w + 4 : -10),
-      y: player.y + player.h / 2 - 4,
-      vx: player.facing * (w.projSpeed || 400),
-      vy: 0,
-      r: 5,
-      dmg: dmg,
-      elem: player.elementKey,
-      from: 'player',
-      life: 2.0,
-      pierce: w.pierce || false,
-      homing: w.homing || false,
-      turnRate: w.turnRate || 0,
-      hitList: []
-    });
-  } else {
-    // Melee Hitbox Calculation
-    const range = w.range || 45;
-    const atkX = player.facing === 1 ? player.x + player.w : player.x - range;
-    const atkY = player.y - 10;
-    const atkW = range;
-    const atkH = player.h + 20;
+  if (w.type === "melee") {
+    player.swingTimer = 0.18;
+    const hitBoxW = w.range || 45;
+    const hitX = player.facing === 1 ? player.x + player.w : player.x - hitBoxW;
+    const hitY = player.y - 10;
+    const hitH = player.h + 20;
 
     for (const e of enemies) {
-      if (atkX < e.x + e.w && atkX + atkW > e.x &&
-          atkY < e.y + e.h && atkY + atkH > e.y) {
-        if (typeof e.takeDamage === 'function') {
-          e.takeDamage(dmg, player.elementKey);
-        } else {
+      if (e.x < hitX + hitBoxW && e.x + e.w > hitX &&
+          e.y < hitY + hitH && e.y + e.h > hitY) {
+        if (typeof e.hp === 'number') {
           e.hp -= dmg;
+          if (e.hp <= 0 && e.onDeath) e.onDeath();
         }
       }
     }
-  }
-}
+  } 
+  else if (w.type === "shotgun") {
+    const count = w.count || 4;
+    const spread = w.spread || 0.45;
+    const baseAngle = player.facing === 1 ? 0 : Math.PI;
 
-export function jump() {
-  if (player.grounded) {
-    player.vy = -player.jumpForce;
-    player.grounded = false;
-  }
-}
-
-export function dash() {
-  if (player.dashCooldown <= 0 && !player.isDashing) {
-    player.isDashing = true;
-    player.dashTimer = 0.2;
-    player.dashCooldown = 1.0;
-  }
-}
-
-export function applyDamageAndStatus(dmg) {
-  if (player.isDashing) return;
-
-  if (player.shield > 0) {
-    player.shield -= dmg;
-    if (player.shield < 0) {
-      player.hp += player.shield;
-      player.shield = 0;
+    for (let i = 0; i < count; i++) {
+      const angle = baseAngle + (Math.random() - 0.5) * spread;
+      const speed = w.speed || 380;
+      projectiles.push({
+        x: px,
+        y: py,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: 4,
+        dmg: dmg,
+        elem: elem,
+        from: 'player',
+        life: (w.range || 140) / speed
+      });
     }
-  } else {
-    player.hp -= dmg;
+  } 
+  else if (w.type === "pierce") {
+    const vx = player.facing * (w.speed || 650);
+    projectiles.push({
+      x: px,
+      y: py,
+      vx: vx,
+      vy: 0,
+      r: 6,
+      dmg: dmg,
+      elem: elem,
+      from: 'player',
+      pierce: true,
+      hitList: [],
+      life: (w.range || 600) / (w.speed || 650)
+    });
+  } 
+  else if (w.type === "homing") {
+    const speed = w.speed || 220;
+    const vx = player.facing * speed;
+    projectiles.push({
+      x: px,
+      y: py,
+      vx: vx,
+      vy: -50,
+      r: 7,
+      dmg: dmg,
+      elem: elem,
+      from: 'player',
+      homing: true,
+      turnRate: w.turnRate || 4.5,
+      life: (w.range || 450) / speed
+    });
   }
-  player.hp = Math.max(0, player.hp);
 }
 
-export function drawPlayer(ctx, camX, camY = 0) {
+export function updatePlayer(dt, enemies, projectiles, onGameOver) {
+  // Cooldown & Timers
+  if (player.attackCooldown > 0) player.attackCooldown -= dt;
+  if (player.dashTimer > 0) player.dashTimer -= dt;
+  if (player.dashCooldown > 0) player.dashCooldown -= dt;
+  if (player.invulnTimer > 0) player.invulnTimer -= dt;
+  if (player.swingTimer > 0) player.swingTimer -= dt;
+
+  // Speed & Movement
+  let currentSpeed = player.speed;
+  if (player.dashTimer > 0) {
+    currentSpeed *= 2.6;
+  }
+
+  player.vx = player.moveAxis * currentSpeed;
+  if (player.moveAxis !== 0) {
+    player.facing = player.moveAxis > 0 ? 1 : -1;
+  }
+
+  // Gravity
+  player.vy += player.gravity * dt;
+  if (player.vy > player.maxFallSpeed) {
+    player.vy = player.maxFallSpeed;
+  }
+
+  // Update Positions
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+
+  // Level Bound Clamping
+  player.x = Math.max(0, Math.min(LEVEL_WIDTH - player.w, player.x));
+
+  // Reset ground state
+  player.grounded = false;
+
+  // Ground Collision Check
+  if (player.y + player.h >= GROUND_Y) {
+    player.y = GROUND_Y - player.h;
+    player.vy = 0;
+    player.grounded = true;
+    player.doubleJumpAvailable = true;
+  }
+
+  // Platform Collisions (Top-down landing)
+  if (platforms && Array.isArray(platforms)) {
+    for (const p of platforms) {
+      if (
+        player.vy >= 0 &&
+        player.x + player.w > p.x &&
+        player.x < p.x + p.w &&
+        player.y + player.h >= p.y &&
+        player.y + player.h - player.vy * dt <= p.y + 14
+      ) {
+        player.y = p.y - player.h;
+        player.vy = 0;
+        player.grounded = true;
+        player.doubleJumpAvailable = true;
+        break;
+      }
+    }
+  }
+
+  // Game over check
+  if (player.hp <= 0) {
+    onGameOver();
+  }
+}
+
+export function drawPlayer(ctx, camX, camY) {
   const sx = player.x - camX;
   const sy = player.y - camY;
 
-  // 1. Render Character Sprite
   ctx.save();
-  ctx.translate(sx + player.w / 2, sy + player.h / 2);
 
-  if (player.isDashing) {
-    ctx.fillStyle = "rgba(52, 152, 219, 0.4)";
-    ctx.fillRect(-player.w / 2 - player.facing * 14, -player.h / 2, player.w, player.h);
+  // Invulnerability flashing
+  if (player.invulnTimer > 0 && Math.floor(Date.now() / 80) % 2 === 0) {
+    ctx.globalAlpha = 0.4;
   }
 
-  if (player.facing === -1) {
-    ctx.scale(-1, 1);
+  // Dash effect trail
+  if (player.dashTimer > 0) {
+    ctx.fillStyle = "rgba(231, 76, 60, 0.35)";
+    ctx.fillRect(sx - player.facing * 12, sy, player.w, player.h);
   }
 
-  // Torso / Suit
-  ctx.fillStyle = "#3498db";
-  ctx.fillRect(-player.w / 2, -player.h / 2 + 8, player.w, player.h - 14);
+  // Player Body
+  ctx.fillStyle = "#e74c3c";
+  ctx.fillRect(sx, sy, player.w, player.h);
 
-  // Helmet & Visor
-  ctx.fillStyle = "#ecf0f1";
-  ctx.fillRect(-player.w / 2 + 2, -player.h / 2, player.w - 4, 10);
-  ctx.fillStyle = "#2c3e50";
-  ctx.fillRect(1, -player.h / 2 + 3, 7, 3);
+  // Facing Direction Eye
+  ctx.fillStyle = "#ffffff";
+  const eyeX = player.facing === 1 ? sx + player.w - 8 : sx + 2;
+  ctx.fillRect(eyeX, sy + 8, 6, 6);
 
-  // Running Animation Legs
-  const isMoving = Math.abs(player.vx) > 5;
-  const stride = isMoving ? Math.sin(player.animTimer) * 7 : 0;
+  // Melee Attack Arc FX
+  if (player.swingTimer > 0) {
+    const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS.sword;
+    const range = w.range || 45;
+    const elemColor = ELEMENTS[player.elementKey]?.color || "#ffffff";
 
-  ctx.fillStyle = "#2c3e50";
-  ctx.fillRect(-player.w / 2 + 3, player.h / 2 - 8, 5, 8 + (isMoving ? stride : 0));
-  ctx.fillRect(player.w / 2 - 8, player.h / 2 - 8, 5, 8 - (isMoving ? stride : 0));
+    ctx.strokeStyle = elemColor;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    const arcX = player.facing === 1 ? sx + player.w : sx;
+    ctx.arc(
+      arcX,
+      sy + player.h / 2,
+      range,
+      player.facing === 1 ? -Math.PI / 3 : Math.PI - Math.PI / 3,
+      player.facing === 1 ? Math.PI / 3 : Math.PI + Math.PI / 3
+    );
+    ctx.stroke();
+  }
 
   ctx.restore();
-
-  // 2. Render Melee Arc Slash Effect in Screen-Space Coordinates
-  if (player.attackAnimTimer > 0) {
-    const w = WEAPONS[player.weaponKey] || LEGENDARY_WEAPONS[player.weaponKey] || WEAPONS['sword'];
-    
-    if (!w || !w.type || w.type === 'melee') {
-      ctx.save();
-      const centerX = sx + (player.facing === 1 ? player.w + 10 : -10);
-      const centerY = sy + player.h / 2;
-
-      ctx.strokeStyle = "#f39c12";
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      
-      const startAngle = player.facing === 1 ? -Math.PI / 3 : (2 * Math.PI) / 3;
-      const endAngle = player.facing === 1 ? Math.PI / 3 : (4 * Math.PI) / 3;
-
-      ctx.arc(centerX, centerY, 28, startAngle, endAngle, false);
-      ctx.stroke();
-
-      // Bright Core Glow Line
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, 26, startAngle, endAngle, false);
-      ctx.stroke();
-
-      ctx.restore();
-    }
-  }
 }
