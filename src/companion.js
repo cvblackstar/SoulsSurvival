@@ -13,7 +13,7 @@ export const wolf = {
 
 export function resetCompanion(px, py) {
   wolf.x = px - 30;
-  wolf.y = py;
+  wolf.y = py + 18; // Match foot-level alignment with player
   wolf.hp = wolf.max;
   wolf.facing = 1;
   wolf.animTimer = 0;
@@ -24,7 +24,8 @@ export function updateCompanion(dt, player, enemies, projectiles) {
   const targetX = player.x - player.facing * followDist;
   const dx = targetX - wolf.x;
 
-  if (Math.abs(dx) > 5) {
+  // Horizontal Movement
+  if (Math.abs(dx) > 6) {
     wolf.vx = Math.sign(dx) * 160;
     wolf.facing = wolf.vx > 0 ? 1 : -1;
     wolf.x += wolf.vx * dt;
@@ -34,8 +35,17 @@ export function updateCompanion(dt, player, enemies, projectiles) {
     wolf.animTimer = 0;
   }
 
-  // Vertical tracking relative to player position
-  wolf.y += (player.y + (player.h - wolf.h) - wolf.y) * 8 * dt;
+  // Smooth frame-rate-independent Y Tracking
+  const targetY = player.y + (player.h - wolf.h);
+  const lerpFactor = 1 - Math.exp(-12 * dt); // Prevents frame jitter
+  wolf.y += (targetY - wolf.y) * lerpFactor;
+
+  // Rubber-band catch-up if wolf falls too far behind (e.g. fast drops or dashes)
+  const distToPlayer = Math.hypot(player.x - wolf.x, player.y - wolf.y);
+  if (distToPlayer > 300) {
+    wolf.x = player.x - player.facing * followDist;
+    wolf.y = targetY;
+  }
 }
 
 export function drawCompanion(ctx, camX, camY = 0) {
