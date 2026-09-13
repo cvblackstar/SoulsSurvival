@@ -245,6 +245,10 @@ canvas {
   color: #e74c3c;
 }
 
+.gameclear-title {
+  color: #2ecc71;
+}
+
 .menu-sub {
   margin: 0;
   font-size: 12px;
