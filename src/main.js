@@ -21,6 +21,8 @@ let selectedDifficulty = 'hard';
 let bossDefeated = false;
 
 let stage = 1;
+const MAX_STAGE = 5;
+let doorAnim = 0;
 let pendingStage = 1;
 const TRANSITION_DURATION = 1.8;
 let transitionTimer = 0;
@@ -80,6 +82,8 @@ resize();
 const menuScreen = document.getElementById('menu-screen');
 const gameoverScreen = document.getElementById('gameover-screen');
 const gameoverStats = document.getElementById('gameover-stats');
+const gameclearScreen = document.getElementById('gameclear-screen');
+const gameclearRestartBtn = document.getElementById('gameclear-restart-btn');
 const diffNormalBtn = document.getElementById('diff-normal');
 const diffHardBtn = document.getElementById('diff-hard');
 const startBtn = document.getElementById('start-btn');
@@ -149,6 +153,7 @@ diffNormalBtn.addEventListener('click', () => selectDifficulty('normal'));
 diffHardBtn.addEventListener('click', () => selectDifficulty('hard'));
 startBtn.addEventListener('click', () => { menuScreen.classList.add('hidden'); startGame(); });
 respawnBtn.addEventListener('click', () => { gameoverScreen.classList.add('hidden'); startGame(); });
+gameclearRestartBtn.addEventListener('click', () => { gameclearScreen.classList.add('hidden'); startGame(); });
 
 function startGame() {
   stage = 1;
@@ -184,7 +189,18 @@ function gameOver() {
   syncDomHud();
 }
 
+function gameClear() {
+  gameState = 'gameclear';
+  player.moveAxis = 0;
+  gameclearScreen.classList.remove('hidden');
+  syncDomHud();
+}
+
 function startTransition() {
+  if (stage >= MAX_STAGE) {
+    gameClear();
+    return;
+  }
   gameState = 'transition';
   pendingStage = stage + 1;
   transitionTimer = TRANSITION_DURATION;
@@ -193,8 +209,7 @@ function startTransition() {
 
 function advanceStage() {
   stage = pendingStage;
-  const stageMult = Math.pow(1.05, stage - 1);
-  resetEnemies(stageMult);
+  resetEnemies(stage);
   
   const startX = playerStart ? playerStart.x : 60;
   const startY = playerStart ? playerStart.y : GROUND_Y - 40;
@@ -209,14 +224,15 @@ function advanceStage() {
   camX = 0;
   camY = 0;
   bossDefeated = false;
-  const pct = Math.round((stageMult - 1) * 100);
-  setMsg(`Stage ${stage} - enemies are ${pct}% stronger!`, 4);
+  const hpPct = Math.round((Math.pow(1.03, stage - 1) - 1) * 100);
+  const dmgPct = Math.round((Math.pow(1.05, stage - 1) - 1) * 100);
+  setMsg(`Stage ${stage} - enemies have +${hpPct}% HP and +${dmgPct}% damage!`, 4);
 }
 
 function handleEnemyDeath(e) {
   if (e.type === 'boss') {
     bossDefeated = true;
-    setMsg("BOSS DEFEATED! The path ahead is open - reach the portal!", 4);
+    setMsg("BOSS DEFEATED! A teleportation door has opened - step through it!", 4);
     spawnDrop(e.x, e.y, true, false, false);
   } else if (e.type === 'miniboss') {
     setMsg("Mini-boss defeated! Rare loot dropped!", 2.5);
@@ -228,6 +244,7 @@ function handleEnemyDeath(e) {
 
 function update(dt) {
   if (msgT > 0) msgT -= dt;
+  doorAnim += dt;
 
   updatePlayer(dt, enemies, projectiles, () => { if (gameState === 'playing') gameOver(); });
   updateCompanion(dt, player, enemies, projectiles);
@@ -411,13 +428,42 @@ function drawLevel() {
     const gsx = goal.x - camX;
     const gsy = goal.y - camY;
     if (gsx + goal.w > 0 && gsx < W) {
-      ctx.fillStyle = bossDefeated ? "#f1c40f" : "#555";
-      ctx.fillRect(gsx, gsy, 6, goal.h);
-      ctx.beginPath();
-      ctx.moveTo(gsx + 6, gsy);
-      ctx.lineTo(gsx + 34, gsy + 14);
-      ctx.lineTo(gsx + 6, gsy + 28);
-      ctx.fill();
+      // Door frame
+      ctx.fillStyle = "#2b2b33";
+      ctx.fillRect(gsx - 6, gsy - 8, goal.w + 12, goal.h + 16);
+
+      const cx = gsx + goal.w / 2, cy = gsy + goal.h / 2;
+      if (bossDefeated) {
+        // Active teleportation door: glowing, swirling portal
+        const pulse = 0.75 + 0.25 * Math.sin(doorAnim * 3);
+        const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, goal.w * 0.9 * pulse);
+        grad.addColorStop(0, "#e0f7ff");
+        grad.addColorStop(0.45, "#4fc3f7");
+        grad.addColorStop(1, "#0d2b45");
+        ctx.fillStyle = grad;
+        ctx.fillRect(gsx, gsy, goal.w, goal.h);
+
+        ctx.strokeStyle = "#8ecbff";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 2; i++) {
+          const spin = doorAnim * (i % 2 === 0 ? 2 : -2);
+          const r = goal.w * 0.4 * (0.5 + i * 0.4);
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, spin, spin + Math.PI * 1.2);
+          ctx.stroke();
+        }
+      } else {
+        // Sealed door: dim and inert until the boss falls
+        ctx.fillStyle = "#3a3a42";
+        ctx.fillRect(gsx, gsy, goal.w, goal.h);
+        ctx.strokeStyle = "#55555f";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(gsx + 4, gsy + 4, goal.w - 8, goal.h - 8);
+      }
+
+      ctx.strokeStyle = bossDefeated ? "#cdefff" : "#1a1a20";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(gsx - 6, gsy - 8, goal.w + 12, goal.h + 16);
     }
   }
 }
@@ -500,7 +546,7 @@ function draw() {
   }
 
   ctx.fillStyle = "#9db4d9"; ctx.font = "11px system-ui"; ctx.textAlign = "right";
-  ctx.fillText(`STAGE ${stage}`, W - 12, 16);
+  ctx.fillText(`STAGE ${stage}/${MAX_STAGE}`, W - 12, 16);
   ctx.textAlign = "left";
   
   const progress = clamp(player.x / LEVEL_WIDTH, 0, 1);
